@@ -1,0 +1,414 @@
+# HostFi Customer Care Bot Knowledge Base
+## Company Overview**Name:** HostFi (Host Finance)**Website:** https://hostfi.io**Purpose:** A financial platform that makes buying, selling, trading, and managing crypto easy for Nigerians**Mission:** Providing financial access for everyone (banked and unbanked) through zero-fee crypto services
+---
+## Core Features & Services
+### 1. Instant Buy & Sell with Naira- Buy crypto (BTC, USDT, ETH, SOL, BNB, USDC, etc.) using naira instantly- Sell crypto and get naira in your wallet immediately- No P2P stress - direct transactions- Competitive exchange rates- Zero deposit fees
+### 2. Virtual Dollar Cards- Create multiple virtual cards (Mastercard or Visa)- Fund with naira or USDT/USDC- Use for online payments globally (Netflix, Spotify, Amazon, shopping, subscriptions, travel bookings, etc.)- Works with Apple Pay, Google Pay, Samsung Pay for contactless payments- Choose card categories (e-commerce, streaming, travel, business)- Track all card transactions from simple dashboard- Create different cards for different purposes (personal, business, subscriptions)
+### 3. Crypto Trading & Swaps- Supported cryptocurrencies: BTC, USDT, ETH, SOL, BNB, DOGE, USDC, TRX, SHIB, XLM, POL, and more- **Free crypto swaps** across all supported pairs - zero fees- Instant execution- Transparent pricing - rate shown is rate you get- No hidden markups
+### 4. Multiple Wallets- Support for multiple currencies: NGN, BTC, USDT, ETH, SOL, BNB, USDC, and more- Fund wallets with fiat or crypto- Swap across currencies easily- Track everything from one dashboard
+### 5. Secure & Instant Withdrawals- Withdraw to ANY verified bank account in Nigeria (Access, GTBank, Zenith, First Bank, UBA, etc.)- Must be in your name for security- Fast, safe, and reliable- Save bank accounts for quick future withdrawals
+### 6. Free Transfers Between HostFi Users- Send money to other HostFi users at zero cost- Use their email, phone number, or username- Instant delivery- No fees ever
+### 7. HXP (HostFi Points) Rewards Program**Status:** Gradually wrapping up - earn while you can
+Ways to earn HXP:- Deposit funds- Swap crypto- Log in daily- Make trades- Refer friends
+Benefits:- Convert points to cash or crypto anytime- Rewards loyalty and activity
+### 8. Referral Program- Share referral link with friends- When they join and start trading, both earn rewards- Everyone benefits
+### 9. Multi-Layer Security- 2FA via SMS, email, authenticator app, and PIN- Withdrawals only to verified accounts in your name- Every transaction logged and visible- Multi-layered security protection
+### 10. Customer SupportAvailable via:- Live chat in app- Email: support@hostfi.io- Telegram: @HostFiApp- Phone support- Active Telegram community for questions and updates
+---
+## Unique Selling Points (USPs)
+### Zero Fees Policy- **Zero deposit fees** - fund wallet without charges- **Zero swap fees** - trade between any crypto pairs for free- **Zero transfer fees** - send money to other HostFi users free
+### Speed- Instant buy/sell with naira- Instant withdrawals to bank accounts- Instant swaps between cryptocurrencies- Money moves in seconds, not days
+### Transparency- Exchange rate shown upfront is the rate you get- No "subject to change at checkout"- No hidden fees or surprise deductions- Every transaction logged and visible
+### Accessibility- 24/7 platform availability- Works on web, mobile (iOS and Android), and desktop- Simple, user-friendly interface- Built for both beginners and active users
+---
+## Supported Cryptocurrencies- Bitcoin (BTC)- Tether (USDT)- Ethereum (ETH)- Solana (SOL)- Binance Coin (BNB)- USD Coin (USDC)- Dogecoin (DOGE)- Tron (TRX)- Shiba Inu (SHIB)- Stellar (XLM)- Polygon (POL)- And more
+---
+## Common User Scenarios
+### For Freelancers- Receive USDT payments from international clients- Swap to naira instantly- Withdraw to bank account- Get paid Friday, spend Friday evening
+### For Traders- Buy crypto with naira (no P2P needed)- Free swaps between any crypto pairs- Hold stablecoins (USDT/USDC) for stability- Sell and withdraw to bank when ready
+### For Online Shoppers- Create virtual dollar card- Fund with naira or USDT- Shop on Amazon, pay for subscriptions, book travel- Access global marketplace from Nigeria
+### For Students/International Payments- Send crypto cross-border easily- Use virtual cards for international services- Pay for courses (Coursera, Udemy)- Subscribe to tools (ChatGPT Plus, Canva Pro, Adobe)
+### For Group Payments- Friends splitting subscriptions- One person creates virtual card- Others send their share via free HostFi transfers- Card funded, purchase made
+---
+## Pricing & Rates- **Deposit fees:** ₦0 (zero)- **Swap fees:** ₦0 (zero)- **Transfer fees (HostFi to HostFi):** ₦0 (zero)- **Exchange rates:** Competitive market rates, shown upfront- **Virtual card creation:** Minimal fee (typically $1)- **Withdrawal fees:** Standard (check current rates in app)
+---
+## Platform Availability- **iOS:** Available on App Store- **Android:** Available on Play Store- **Web:** https://hostfi.io- **Desktop:** Desktop app available
+---
+## Social Media & Community- **Twitter/X:** @HostFi_App- **Instagram:** @HostFi_App- **Facebook:** HostFiapp- **TikTok:** Host Finance- **Telegram Community:** HostFi App
+---
+## Common FAQs
+### Account & Security**Q: How do I create an account?**A: Download HostFi from App Store or Play Store, or visit hostfi.io. Sign up with your email and complete KYC verification.
+**Q: Is my money safe on HostFi?**A: Yes. We use multi-layer security (2FA via SMS, email, authenticator, PIN). Withdrawals only go to verified accounts in your name.
+**Q: What if I'm having KYC issues?**A: Contact support via live chat, email (support@hostfi.io), or Telegram. We'll help you resolve it quickly.
+### Deposits & Withdrawals**Q: Are there deposit fees?**A: No. HostFi charges zero deposit fees.
+**Q: How long do deposits take?**A: Deposits are instant in normal conditions. Occasional delays may occur due to external factors (like AWS outages), but funds are always safe.
+**Q: Can I withdraw to any bank?**A: Yes, any Nigerian bank account verified in your name (Access, GTBank, Zenith, UBA, First Bank, etc.).
+**Q: How long do withdrawals take?**A: Withdrawals are typically instant to a few minutes.
+### Trading & Swaps**Q: Do you charge swap fees?**A: No. All crypto-to-crypto and fiat-to-crypto swaps are completely free on HostFi.
+**Q: What exchange rate do I get?**A: The exact rate shown before you confirm the swap. No changes at checkout.
+**Q: Can I swap between any cryptocurrencies?**A: Yes, free swaps between any supported crypto pairs.
+### Virtual Cards**Q: How do I create a virtual card?**A: Go to the Cards section in your HostFi app, click "Create Card," choose Mastercard or Visa, and fund it.
+**Q: What can I use my virtual card for?**A: Any online payment where Visa/Mastercard is accepted: Netflix, Spotify, Amazon, flight bookings, subscriptions, etc.
+**Q: Can I create multiple cards?**A: Yes. Create different cards for different purposes (business, personal, subscriptions, shopping).
+**Q: How do I fund my virtual card?**A: Fund with naira or USDT/USDC directly from your HostFi wallet.
+**Q: Does the virtual card work internationally?**A: Yes, it works everywhere Visa/Mastercard is accepted globally.
+### Transfers**Q: How do I send money to another HostFi user?**A: Use their email, phone number, or username. Zero fees, instant delivery.
+**Q: Are transfers to other HostFi users really free?**A: Yes, completely free. Always.
+### HXP Points**Q: What are HXP points?**A: Rewards points you earn for deposits, swaps, logins, trades, and referrals.
+**Q: How do I convert HXP to cash?**A: Go to the HXP section in your app and convert points to naira or crypto.
+**Q: Is HXP still available?**A: The HXP rewards program is gradually wrapping up. Earn while you still can.
+### Troubleshooting**Q: My deposit hasn't arrived. What do I do?**A: Contact support immediately via live chat or email. Provide your transaction details, and we'll expedite it.
+**Q: My withdrawal failed. Why?**A: Ensure the bank account is verified and in your name. Contact support if the issue persists.
+**Q: I'm experiencing delays. What's happening?**A: Occasional delays can occur due to external infrastructure issues (e.g., AWS outages). Your funds are always safe. Contact support for help.
+---
+## Troubleshooting Common Issues
+### Deposit Issues- **Mismatched names:** Depositor name must match HostFi account name. Contact support to resolve.- **Delayed deposits:** May be due to external factors. Contact support to expedite.
+### Withdrawal Issues- **Failed withdrawal:** Ensure bank account is verified and in your name.- **Slow withdrawal:** Contact support for assistance.
+### KYC Issues- **Rejected KYC:** Ensure documents are clear, valid, and match your information. Contact support for help.
+### Card Issues- **Card declined:** Ensure card is funded and merchant accepts Visa/Mastercard.- **Can't create card:** Contact support for assistance.
+---
+## Brand Voice & Messaging
+### Tone- Clear, friendly, and simple- Avoid exaggerated expressions- Use simple words and sentence structure- Focus on benefits, not just features- Make crypto feel usable, everyday, and rewarding- Professional but warm and conversational
+### Key Messages1. **Simplicity:** Crypto doesn't have to be complicated2. **Instant Access:** Buy, sell, swap, withdraw in seconds3. **Real Utility:** Use crypto for everyday transactions4. **Cost Savings:** Zero fees for swaps, deposits, and transfers5. **Rewarding:** Earn HXP points for activity6. **Secure:** Multi-layer protection, verified withdrawals only
+---
+## Escalation Procedures
+### When to Escalate to Human Support- Complex KYC issues after initial troubleshooting- Large transaction disputes- Security concerns or suspected fraud- Technical issues bot cannot resolve- Angry or highly dissatisfied customers- Requests for features not yet available
+### Contact Channels for Escalation- Live chat in app- Email: support@hostfi.io- Telegram: @HostFiApp- Phone support (provide number if available)
+---
+## Product PositioningHostFi is for people in Nigeria (expanding soon) who want an easy, fast, and secure way to trade, spend, and manage their crypto. Unlike many platforms, HostFi keeps things simple and affordable with no deposit fees, free swaps, fast withdrawals, and real utility through virtual cards and free transfers.
+---
+This knowledge base should enable the customer care bot to handle 80-90% of common queries accurately and helpfully. For anything beyond this scope, escalate to human support.
+
+
+
+HostFi incorporates industry-leading security measures for accounts and transactions by incorporating two-factor authentication and advanced encryption protocols.
+
+
+HostFi does not charge any fees for deposits or swaps. Fees apply only to fiat and cryptocurrency withdrawals.
+
+
+HostFi supports a range of major cryptocurrencies, including BNB, BTC, ETH, USDC, USDT, and Solana, with more cryptocurrencies planned for future integration.
+
+
+For security and compliance purposes, withdrawals are only allowed to bank accounts in your name.
+
+
+Host Finance
+/
+Privacy & Security
+Privacy & Security
+Privacy & Security
+Privacy & Security
+1. General
+HostFi Services Ltd ("us", "we", or "our") operates the websites and applications available on w or any of its subdomains (the "Service").
+
+This page informs you of our policies regarding the collection, use, and disclosure of personal data when you use our Service and the choices you have associated with that data.
+
+We use your data to provide and improve the Service. By using the Service, you agree to the collection and use of information in accordance with this policy. Unless otherwise defined in this Privacy and Security Policy, terms used in this Privacy and Security Policy have the same meanings as in our Terms and Conditions, accessible here.
+
+2. Definitions
+Personal Data
+
+Personal Data means data about a living individual who can be identified from that data (or from those and other information either in our possession or likely to come into our possession).
+
+Usage Data
+
+Usage Data is data collected automatically either generated by the use of the Service or from the Service infrastructure itself (for example, the duration of a page visit).
+
+Cookies
+
+Cookies are small pieces of data stored on a User's device.
+
+‍Data Controller
+Data Controller means a person who (either alone or jointly or in common with other persons) determines the purposes for which and the manner in which any personal data are, or are to be, processed.
+For the purpose of this Privacy and Security Policy, we are a Data Controller of your data.
+
+‍Data Processor (or Service Providers)
+Data Processor (or Service Provider) means any person (other than an employee of the Data Controller) who processes the data on behalf of the Data Controller.
+We may use the services of various Service Providers in order to process your data more effectively.
+
+‍Data Subject
+Data Subject is any living individual who is the subject of Personal Data.
+
+‍User
+
+The User is the individual using our Service. The User corresponds to the Data Subject, who is the subject of Personal Data.
+
+3. Information Collection & Use
+We collect several different types of information for various purposes to provide and improve our Service to you.
+
+
+Types of Data Collected
+
+Personal Data
+
+While using our Service, we may ask you to provide us with certain personally identifiable information that can be used to contact or identify you ("Personal Data"). Personally identifiable information may include, but is not limited to:
+
+Email address
+First name and last name
+Phone number
+Address, State, Province, ZIP/Postal code, City
+Cookies and Usage Data
+We may use your Personal Data to contact you with newsletters, marketing or promotional materials and other information that may be of interest to you. You may opt out of receiving any, or all, of these communications from us by following the unsubscribe link or instructions provided in any email we send or by contacting us.
+
+Usage Data
+
+We may also collect information on how the Service is accessed and used ("Usage Data"). This Usage Data may include information such as your computer's Internet Protocol address (e.g. IP address), browser type, browser version, the pages of our Service that you visit, the time and date of your visit, the time spent on those pages, unique device identifiers and other diagnostic data.
+
+Tracking & Cookies Data
+
+We use cookies and similar tracking technologies to track the activity on our Service and hold certain information.
+
+Cookies are files with a small amount of data which may include an anonymous unique identifier. Cookies are sent to your browser from a website and stored on your device. Tracking technologies also used are beacons, tags, and scripts to collect and track information and to improve and analyse our Service.
+
+You can instruct your browser to refuse all cookies or to indicate when a cookie is being sent. However, if you do not accept cookies, you may not be able to use some portions of our Service.
+
+Examples of Cookies we use:
+
+Session Cookies. We use Session Cookies to operate our Service.
+Preference Cookies. We use Preference Cookies to remember your preferences and various settings.
+Security Cookies. We use Security Cookies for security purposes.
+4. Use Of Data
+HostFi Services Ltd uses the collected data for various purposes:
+
+To provide and maintain our Service
+To notify you about changes to our Service
+To allow you to participate in interactive features of our Service when you choose to do so
+To provide customer support
+To gather analysis or valuable information so that we can improve our Service
+To monitor the usage of our Service
+To detect, prevent and address technical issues
+To provide you with news, special offers and general information about other goods, services and events which we offer that are similar to those that you have already purchased or enquired about unless you have opted not to receive such information.
+5. Retention of Data
+HostFi Services Ltd will retain your Personal Data only for as long as is necessary for the purposes set out in this Privacy and Security Policy. We will retain and use your Personal Data to the extent necessary to comply with our legal obligations (for example, if we are required to retain your data to comply with applicable laws), resolve disputes, and enforce our legal agreements and policies.
+
+HostFi Services Ltd will also retain Usage Data for internal analysis purposes. Usage Data is generally retained for a shorter period of time, except when this data is used to strengthen the security or to improve the functionality of our Service, or we are legally obligated to retain this data for longer time periods.
+
+6. Transfer of Data
+Your information, including Personal Data, may be transferred to — and maintained on — computers located outside of your state, province, country or other governmental jurisdiction where the data protection laws may differ from those from your jurisdiction.
+
+If you are located outside Nigeria and choose to provide information to us, please note that we transfer the data, including Personal Data, to Nigeria and process it there.
+
+Your consent to this Privacy and Security Policy followed by your submission of such information represents your agreement to that transfer.
+
+HostFi Services Ltd will take all steps reasonably necessary to ensure that your data is treated securely and in accordance with this Privacy and Security Policy and no transfer of your Personal Data will take place to an organisation or a country unless there are adequate controls in place including the security of your data and other personal information.
+
+7. Disclosure of Law
+Disclosure for Law Enforcement
+
+Under certain circumstances, HostFi Services Ltd may be required to disclose your Personal Data if required to do so by law or in response to valid requests by public authorities (e.g. a court or a government agency).
+
+Legal Requirements
+
+HostFi Services Ltd may disclose your Personal Data in the good faith belief that such action is necessary to:
+
+To comply with a legal obligation
+To protect and defend the rights or property of HostFi Services Ltd
+To prevent or investigate possible wrongdoing in connection with the Service
+To protect the personal safety of users of the Service or the public
+To protect against legal liability
+8. Security of Data
+The security of your data is important to us, but remember that no method of transmission over the Internet, or method of electronic storage is 100% secure. While we strive to use commercially acceptable means to protect your Personal Data, we cannot guarantee its absolute security.
+
+9. "Do Not Track" Signals
+We do not support Do Not Track ("DNT"). Do Not Track is a preference you can set in your web browser to inform websites that you do not want to be tracked.
+
+You can enable or disable Do Not Track by visiting the Preferences or Settings page of your web browser.
+
+10. Your Rights
+HostFi Services Ltd aims to take reasonable steps to allow you to correct, amend, delete, or limit the use of your Personal Data.
+
+Whenever made possible, you can update your Personal Data directly within your account settings section. If you are unable to change your Personal Data, please contact us to make the required changes.
+
+If you wish to be informed what Personal Data we hold about you and if you want it to be removed from our systems, please contact us.
+
+In certain circumstances, you have the right:
+
+To access and receive a copy of the Personal Data we hold about you
+To rectify any Personal Data held about you that is inaccurate
+To request the deletion of Personal Data held about you
+You have the right to data portability for the information you provide to HostFi Services Ltd. You can request to obtain a copy of your Personal Data in a commonly used electronic format so that you can manage and move it.
+
+Please note that we may ask you to verify your identity before responding to such requests.
+
+11. Service Providers
+We may employ third party companies and individuals to facilitate our Service ("Service Providers"), to provide the Service on our behalf, to perform Service-related services or to assist us in analysing how our Service is used.
+
+These third parties have access to your Personal Data only to perform these tasks on our behalf and are obligated not to disclose or use it for any other purpose.
+
+Analytics
+
+We may use third-party Service Providers to monitor and analyse the use of our Service.
+
+Google Analytics
+Google Analytics is a web analytics service offered by Google that tracks and reports website traffic. Google uses the data collected to track and monitor the use of our Service. This data is shared with other Google services. Google may use the collected data to contextualize and personalise the ads of its own advertising network.You can opt-out of having made your activity on the Service available to Google Analytics by installing the Google Analytics opt-out browser add-on. The add-on prevents the Google Analytics JavaScript (ga.js, analytics.js, and dc.js) from sharing information with Google Analytics about visits activity.For more information on the privacy practices of Google, please visit the Google Privacy & Terms web page: https://policies.google.com/privacy
+
+12. Links to Other Sites
+Our Service may contain links to other sites that are not operated by us. If you click on a third party link, you will be directed to that third party's site. We strongly advise you to review the Privacy and Security Policy of every site you visit.
+
+We have no control over and assume no responsibility for the content, privacy policies or practices of any third party sites or services.
+
+13. Children's Privacy
+Our Service does not address anyone under the age of 13 ("Children").
+
+We do not knowingly collect personally identifiable information from anyone under the age of 13. If you are a parent or guardian and you are aware that your Children have provided us with Personal Data, please contact us. If we become aware that we have collected Personal Data from children without verification of parental consent, we take steps to remove that information from our servers.
+
+14. Changes to this Privacy and Security Policy
+We may update our Privacy and Security Policy from time to time. We will notify you of any changes by posting the new Privacy and Security Policy on this page.
+
+We will let you know via email and/or a prominent notice on our Service, prior to the change becoming effective and update the "effective date" at the top of this Privacy and Security Policy.
+
+You are advised to review this Privacy and Security Policy periodically for any changes. Changes to this Privacy and Security Policy are effective when they are posted on this page.
+
+15. Contact Us
+If you have any questions about this Privacy and Security Policy, please contact us:
+By email: help@hostfi.io
+
+Host Finance
+/
+Terms of Use
+Terms of Use
+Terms of Use
+Terms of Use
+By accessing the websites at https://hostfi.io/ or any of its subdomains (the "Sites"), you are agreeing to be bound by these terms of service, all applicable laws, and regulations, and agree that you are responsible for compliance with any applicable local laws. If you do not agree with any of these terms, you are prohibited from using or accessing this site. The materials contained in the Sites are protected by applicable copyright and trademark law.
+
+Use License
+Permission is granted to temporarily download one copy of the materials (information or software) on the HostFi Services Ltd Sites for personal, non-commercial transitory viewing only. This is the grant of a license, not a transfer of title, and under this license, you may not:
+
+modify or copy the materials;
+use the materials for any commercial purpose, or for any public display (commercial or non-commercial);
+attempt to decompile or reverse engineer any software contained on HostFi Services Ltd's website;
+remove any copyright or other proprietary notations from the materials; or
+transfer the materials to another person or "mirror" the materials on any other server.
+This license shall automatically terminate if you violate any of these restrictions and may be terminated by HostFi Services Ltd at any time. Upon terminating your viewing of these materials or upon the termination of this license, you must destroy any downloaded materials in your possession whether in electronic or printed format.
+
+Disclaimer
+The materials on the HostFi Services Ltd Sites are provided on an 'as is' basis. HostFi Services Ltd makes no warranties, expressed or implied, and hereby disclaims and negates all other warranties including, without limitation, implied warranties or conditions of merchantability, fitness for a particular purpose, or non-infringement of intellectual property or other violation of rights.
+
+Further, HostFi Services Ltd does not warrant or make any representations concerning the accuracy, likely results, or reliability of the use of the materials on its Sites or otherwise relating to such materials or on any sites linked to the Sites.
+
+Limitations
+In no event shall HostFi Services Ltd or its suppliers be liable for any damages (including, without limitation, damages for loss of data or profit, or due to business interruption) arising out of the use or inability to use the materials on the HostFi Services Ltd Sites, even if HostFi Services Ltd or a HostFi Services Ltd authorised representative has been notified orally or in writing of the possibility of such damage. Because some jurisdictions do not allow limitations on implied warranties, or limitations of liability for consequential or incidental damages, these limitations may not apply to you.
+
+Accuracy of Materials
+The materials appearing on the HostFi Services Ltd Sites could include technical, typographical, or photographic errors. HostFi Services Ltd does not warrant that any of the materials on its website are accurate, complete or current. HostFi Services Ltd may make changes to the materials contained on its Sites at any time without notice. However, HostFi Services Ltd does not make any commitment to update the materials.
+
+Links
+HostFi Services Ltd has not reviewed all of the sites linked to its Sites and is not responsible for the contents of any such linked site. The inclusion of any link does not imply endorsement by HostFi Services Ltd of the site. Use of any such linked website is at the user's own risk.
+
+Modifications
+HostFi Services Ltd may revise these terms of service for its Sites at any time without notice. By using the Sites you are agreeing to be bound by the then current version of these terms of service.
+
+Governing Law
+These terms and conditions are governed by and construed in accordance with the laws of the Federal Republic of Nigeria and you irrevocably submit to the exclusive jurisdiction of the courts in that State or location.
+
+Host Finance
+/
+Compliance Policy
+Compliance Policy
+Compliance Policy
+Compliance Policy
+Anti-Money Laundering & Combating the Financing of Terrorism (AML/CFT) Policy
+1. Policy
+This Anti-Money Laundering & Combating the Financing of Terrorism Policy (“AMF/CFT Policy”) sets out the guidelines for HostFi Services Ltd’s compliance with AML/CFT obligations under the law, as well as regulatory directives, and actively prevents any transaction that facilitates criminal activities.
+
+2. Description
+Money laundering and financing terrorism are financial crimes with economic effects. It requires an underlying primary profit-making crime such as corruption, drug trafficking, market manipulation, fraud, tax evasion, etc., with the intent to conceal the proceeds of the crime and to further the criminal enterprise. AML/CFT compliance programmes help mitigate the adverse effects of criminal economic activity and promote integrity and stability in financial markets. It is also critical to preserving HostFi Services Ltd’s corporate integrity, reputation and operational efficiency.
+
+3. Definitions
+Money Laundering - Money laundering (ML) has been defined as the process whereby criminals attempt to conceal the illegal origin and/or illegitimate ownership of property and assets that are the proceeds of their criminal activities. It is, thus, a derivative crime (Central Bank of Nigeria Manual).
+Terrorism Financing - includes both legitimate and illegitimate money characterised by concealment of the origin or intended criminal use of the funds.
+Know Your Customer - This entails obtaining and verifying customer identity, preservation of records of customers, mandatory disclosure of transactions to authorised statutory bodies.
+Customer Due Diligence - This covers steps taken by HostFi Services Ltd to identify its clients and validate their identities.
+Nigeria Financial Intelligence Unit - The Nigerian arm of the global Financial Intelligence Unit (FIU).
+Politically Exposed Persons - Individuals who are or have been entrusted with prominent public functions in any country; generally presenting a higher risk for potential involvement in bribery and corruption by virtue of their position and the influence that they may hold.
+4. Purpose
+The purpose of this Policy manual is to:
+
+Provide guidance on the standards of conduct and practice that must be followed in the implementation of the Know Your Customer (KYC) and Customer Due Diligence (CDD) requirements for HostFi Services Ltd’s transactions
+Protect HostFi Services Ltd against fraud, reputational and other financial market risks
+Minimise the risks faced by HostFi Services Ltd from proceeds of crime
+Protect the integrity of the Nigerian financial services market against all forms of abuse, fraudulent and unfair trade practices
+5. Policy Statement
+The following statements shall guide the principles and procedures for AML/CFT compliance programme. HostFi Services Ltd shall:
+
+Formulate and implement internal controls and other procedures that will deter criminals from using its facilities for money laundering and terrorist financing and to ensure that its obligations under subsisting laws and Regulations are met
+Designate AML/CFT Chief Compliance Officer at the Management level, with the relevant competence, authority and independence to implement the institution’s AML/CFT compliance programme
+Comply with the requirements of the Money Laundering (Prohibition) Act, 2011 (as amended), Terrorism (Prevention) Act, 2011 (as amended) and Terrorism Prevention (Freezing of International Terrorists Funds and other Related Measures) Regulations 2013, Central Bank of Nigeria (Anti-Money laundering and Combating the Financing of Terrorism for Banks and Other Financial Institutions in Nigeria) Regulations, 2013 including related laws and Regulations
+Comply promptly with all the requests made pursuant to subsisting laws and Regulations and shall provide relevant information to the Central Bank of Nigeria (CBN), the Nigerian Financial Intelligence Unit (NFIU) and other relevant law enforcement agencies on AML/CFT matters
+Identify and report to the NFIU, in the course of its business, any suspicious transactions derived from the criminal activities defined in AML/CFT CBN Regulations
+Ensure the implementation of the requirements of the AML/CFT Act are not inhibited through HostFi Services Ltd’s Confidentiality Agreement or Policy
+Exit relationships which pose heightened money laundering risks to HostFi Services Ltd
+Effectively communicate this Policy to raise the level of staff awareness on AML/CFT issues
+6. Know Your Customer (KYC)
+KYC is the due diligence that Financial Institutions, Financial Market Operators, Capital Market Operators, Financial Market Infrastructures and other regulated companies must perform to identify their clients and ascertain relevant information before carrying-out any financial businesses with them. A client for the purposes of KYC policy is defined as:
+
+An entity that has a business relationship with HostFi Services Ltd
+Any entity connected with a financial transaction, which can pose a significant reputational or other risk to HostFi Services Ltd
+Specifically, HostFi Services Ltd’s KYC policies and procedures emphasise the following:
+
+Obtaining the necessary documents and information from every client (anyone who HostFi Services Ltd receives money from to provide a business)
+Obligation to report to the regulatory authorities on suspicious transactions, which may ultimately have a bearing on money laundering activities
+Updating client information as frequently as practicable
+Identifying the client as well as their beneficial owners and verifying such client’s identity using reliable, independent source documents, data or information
+Independent verification of legal status of incorporated entities and sole proprietorships with the Corporate Affairs Commission, in writing.
+Refusal to transact business with “shell companies” as described under the International Conventions
+Performing enhanced due diligence for higher risk clients, business relationships or transactions including:
+Politically Exposed Persons (PEP), cross border transactions and business relationships
+Any other businesses, activities or professions as may be prescribed by regulatory, supervisory and competent authorities
+7. Record Keeping and Retention Requirements
+Upon request by a regulatory or law enforcement agency, HostFi Services Ltd shall make available records related to AML/CFT compliance or its clients as soon as possible from the date of the request.
+
+8. Transaction Reporting
+HostFi Services Ltd shall exercise due diligence in identifying and reporting a suspicious transaction. Suspicious transactions shall include:
+
+Transactions which are structured to avoid reporting and record keeping requirements
+Altered or false identification or inconsistent information or any transaction involving criminal activity in HostFi Services Ltd’s view
+Entity that belongs to a person or organisation considered as terrorist
+HostFi Services Ltd shall ensure timely and accurate rendition of all AML/CFT returns as specified in relevant Regulations/Act/Guidelines/Circulars that may be issued from time to time by various government agencies.
+
+9. Awareness and Training
+HostFi Services Ltd shall create awareness amongst its employees on AML/CFT through a robust training program that will include formal courses, workshops and newsletters. Such trainings shall incorporate current developments and changes to relevant guidelines as well as internal Policies, procedures, processes and monitoring systems. HostFi Services Ltd shall also utilise other avenues such as e-mails, laptop screensavers, display screens, posters etc. to disseminate compliance issues arising from new rules and regulations to all Staff members.
+
+10. Politically Exposed Persons (PEPs)
+Business relationships with family members or close associates of PEPs involve reputation risks similar to those PEPs themselves. HostFi Services Ltd shall evaluate the risks to its business operations when dealing with PEPs. The following factors shall guide identification of PEPs’ risk characteristics:
+
+Nature of the client and the client’s businesses - The source of the client’s wealth, the nature of the client’s business and the extent to which the client’s business history presents an increased risk for money-laundering and terrorist financing
+Purpose and activity – The size, purpose, services involved in the relationship
+Relationship – The nature and duration of HostFi Services Ltd’s relationship with the client
+Client’s corporate structure
+Public information – Information is known or reasonably available to HostFi Services Ltd about the client
+11. Responsibilities
+HostFi Services Ltd’s Board of Directors is responsible for:
+Approving the AML/CFT Compliance Policy
+Reviewing all periodic report on AML/CFT matters
+Ensuring that Management forwards all required periodic reports to the relevant regulatory authorities
+Providing guidelines regarding the management of AML/CFT compliance risks.
+HostFi Services Ltd’s Compliance Officer is responsible for:
+Coordinating and monitoring day-to-day compliance with applicable money laundering laws and regulations.
+Monitoring transactions to detect unusual suspicious activities
+Prompt preparation and delivery of all relevant returns to the regulatory bodies in line with CBN and FIU Rules and Regulations
+Communicating AML/CFT issues to all stakeholders
+All Staff Members:
+Familiarising themselves with guidelines, policies and best practices relating to their respective areas of responsibility
+Implementing the measures and approaches diligently and to the best of their ability
+Reporting any legal violations or other forms of misconduct in accordance with HostFi Services Ltd Policies and Procedures
+12. Scope
+This Policy manual applies to HostFi Services Ltd and its Board of Directors, Management and Staff with respect to compliance with rules and regulations that govern its operations. Specifically, the AML/CFT Compliance Procedures shall be incorporated into the operations of Business Marketing, Business Origination, Market Regulation, Examination Groups, as well as any other relevant Groups in HostFi Services Ltd.
+
+13. Consequences
+A breach of the anti-money laundering and combating the financing of terrorism laws is a serious offence and could result in lengthy investigations, significant fines and criminal sanctions (including imprisonment of employees).
+
+14. Contact Information
+If you have any questions or comments about these our policy as outlined above, you can contact us at: help@hostfi.io
+
+social links : https://www.facebook.com/hostfinanceapp
+https://t.me/hostfiapp
+https://www.linkedin.com/company/hostfinance/
+https://www.instagram.com/hostfi_app/
+https://twitter.com/hostfi_app
+
+
+official website link: https://hostfi.io/
+download on: playstore: https://play.google.com/store/apps/details?id=com.hostfi.app
+app store: https://apps.apple.com/ng/app/hostfi/id6448360925

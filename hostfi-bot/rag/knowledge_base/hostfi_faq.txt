@@ -1,0 +1,140 @@
+HostFi — Frequently Asked Questions
+=====================================
+
+ACCOUNT & GETTING STARTED
+
+Q: What is HostFi?
+A: HostFi (Host Finance) is a financial platform that makes buying, selling, trading, and managing crypto easy for Nigerians. It provides zero-fee crypto services including instant buy/sell with naira, virtual dollar cards, free crypto swaps, free user-to-user transfers, and multi-asset wallets — all from one app.
+
+Q: How do I create an account?
+A: Download HostFi from the App Store or Google Play Store, or visit https://hostfi.io. Sign up with your email and complete KYC verification. You can also download directly from: https://play.google.com/store/apps/details?id=com.hostfi.app
+
+Q: Is HostFi available in my country?
+A: HostFi is currently available to users in Nigeria and is expanding soon. Check the app store listing for the most current availability information.
+
+Q: What is KYC and why is it required?
+A: KYC (Know Your Customer) is a regulatory requirement. You need to submit a valid government-issued ID and complete identity verification. This protects both you and the platform from fraud, and is required by Nigerian AML/CFT law.
+
+Q: What if I'm having KYC issues?
+A: Contact support via live chat in the app, email (help@hostfi.io), or Telegram (@HostFiApp). They will help you resolve it quickly. Ensure your documents are clear, valid, and match your information.
+
+Q: How long does KYC verification take?
+A: KYC verification is typically completed within a few hours. Most verifications are processed during business days.
+
+SECURITY
+
+Q: Is my money safe on HostFi?
+A: Yes. HostFi uses multi-layer security including 2FA via SMS, email, authenticator app, and PIN. Withdrawals only go to verified accounts in your name. Every transaction is logged and visible. HostFi incorporates industry-leading security measures and advanced encryption protocols.
+
+Q: How do I enable two-factor authentication?
+A: Go to Settings > Security > Two-Factor Authentication in the app. You can enable 2FA using SMS, email, an authenticator app, or PIN to secure your account.
+
+Q: I forgot my password. How do I reset it?
+A: On the login screen, tap "Forgot Password", enter your registered email address, and follow the instructions sent to your email to reset your password.
+
+Q: What should I do if I suspect unauthorized access to my account?
+A: Immediately change your password, enable 2FA if not already active, and contact HostFi support through the app. Do not share your account details with anyone claiming to be support in Telegram DMs. Official support is only available through the app and official channels.
+
+DEPOSITS
+
+Q: Are there deposit fees?
+A: No. HostFi charges zero deposit fees. Fund your wallet without any charges.
+
+Q: How do I deposit NGN into my wallet?
+A: Go to your NGN wallet in the app, tap "Deposit", and you will receive a unique bank account number. Transfer NGN from your bank to this account number.
+
+Q: How long do deposits take?
+A: Deposits are instant in normal conditions. Occasional delays may occur due to external factors (like AWS outages), but funds are always safe.
+
+Q: My deposit hasn't arrived. What do I do?
+A: First ensure the depositor name matches your HostFi account name. Contact support immediately via live chat or email (help@hostfi.io). Provide your transaction details and they will expedite it.
+
+Q: Can I deposit crypto from an external wallet?
+A: Yes. Go to the crypto asset in your HostFi wallet, tap "Receive" or "Deposit", and you will see your unique deposit address and QR code. Always verify you are sending the correct asset on the correct network.
+
+WITHDRAWALS
+
+Q: Can I withdraw to any bank?
+A: Yes, any Nigerian bank account verified in your name — Access, GTBank, Zenith, UBA, First Bank, and more. The account must be in your name for security and compliance.
+
+Q: How long do withdrawals take?
+A: Withdrawals are typically instant to a few minutes.
+
+Q: My withdrawal failed. Why?
+A: Ensure the bank account is verified and in your name. Withdrawals are only allowed to bank accounts matching your HostFi account name. Contact support if the issue persists.
+
+Q: Does HostFi charge withdrawal fees?
+A: HostFi does not charge fees for deposits or swaps. Fees apply only to fiat and cryptocurrency withdrawals. Standard withdrawal fees apply — check current rates in the app.
+
+Q: Can I withdraw crypto to an external wallet?
+A: Yes. Go to the crypto asset, tap "Send" or "Withdraw", enter the destination wallet address, review the network fee, and confirm. Double-check the address as crypto transactions are irreversible.
+
+TRADING & SWAPS
+
+Q: Do you charge swap fees?
+A: No. All crypto-to-crypto swaps are completely free on HostFi. Zero fees across all supported pairs.
+
+Q: What exchange rate do I get?
+A: The exact rate shown before you confirm the swap. No changes at checkout. The rate shown is the rate you get — no hidden markups.
+
+Q: Can I swap between any cryptocurrencies?
+A: Yes, free swaps between any supported crypto pairs. Instant execution with transparent pricing.
+
+Q: What cryptocurrencies does HostFi support?
+A: Bitcoin (BTC), Tether (USDT), Ethereum (ETH), Solana (SOL), Binance Coin (BNB), USD Coin (USDC), Dogecoin (DOGE), Tron (TRX), Shiba Inu (SHIB), Stellar (XLM), Polygon (POL), and more. Additional cryptocurrencies are planned for future integration.
+
+VIRTUAL CARDS
+
+Q: How do I create a virtual card?
+A: Go to the Cards section in your HostFi app, click "Create Card", choose Mastercard or Visa, select a card category (e-commerce, streaming, travel, business), and fund it. Typical creation fee is $1.
+
+Q: What can I use my virtual card for?
+A: Any online payment where Visa/Mastercard is accepted: Netflix, Spotify, Amazon, flight bookings, subscriptions, shopping, and more. It also works with Apple Pay, Google Pay, and Samsung Pay for contactless payments.
+
+Q: Can I create multiple cards?
+A: Yes. Create different cards for different purposes — personal, business, subscriptions, shopping. Track all card transactions from a simple dashboard.
+
+Q: How do I fund my virtual card?
+A: Fund with naira or USDT/USDC directly from your HostFi wallet. The card balance updates immediately.
+
+Q: Does the virtual card work internationally?
+A: Yes, it works everywhere Visa/Mastercard is accepted globally.
+
+Q: My card was declined. What do I do?
+A: Ensure your card is funded and the merchant accepts Visa/Mastercard. Check that card details are entered correctly. Some merchants may not support virtual cards. Contact support if the issue persists.
+
+TRANSFERS
+
+Q: How do I send money to another HostFi user?
+A: Use their email, phone number, or username. Zero fees, instant delivery.
+
+Q: Are transfers to other HostFi users really free?
+A: Yes, completely free. Always. No fees ever.
+
+HXP POINTS & REFERRALS
+
+Q: What are HXP points?
+A: HXP (HostFi Points) are rewards points you earn for deposits, swaps, logins, trades, and referrals.
+
+Q: How do I convert HXP to cash?
+A: Go to the HXP section in your app and convert points to naira or crypto anytime.
+
+Q: Is HXP still available?
+A: The HXP rewards program is gradually wrapping up. Earn while you still can.
+
+Q: How does the referral program work?
+A: Share your referral link with friends. When they join and start trading, both you and your friend earn rewards. Everyone benefits.
+
+TROUBLESHOOTING
+
+Q: I'm experiencing delays. What's happening?
+A: Occasional delays can occur due to external infrastructure issues (e.g., AWS outages). Your funds are always safe. Contact support for help.
+
+Q: How do I check my transaction history?
+A: Go to the Transactions or History section in the app to see a complete record of all deposits, withdrawals, trades, swaps, and card transactions with timestamps and status.
+
+Q: How do I contact HostFi support?
+A: Available via: 1) Live chat in the app 2) Email at help@hostfi.io 3) Telegram at @HostFiApp 4) Phone support. For urgent account issues, use in-app live chat for the fastest response.
+
+ESCALATION — When to Contact Human Support
+Complex KYC issues after initial troubleshooting. Large transaction disputes. Security concerns or suspected fraud. Technical issues the bot cannot resolve. Requests for features not yet available. Contact via live chat, email (help@hostfi.io), or Telegram (@HostFiApp).

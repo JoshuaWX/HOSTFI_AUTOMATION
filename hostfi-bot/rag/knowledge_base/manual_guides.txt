@@ -1,0 +1,107 @@
+HostFi — Manual Support Guides
+===============================
+
+GUIDE 01: Creating Your HostFi Account
+To create an account on HostFi, download the app from the Apple App Store or Google Play Store (https://play.google.com/store/apps/details?id=com.hostfi.app), or visit https://hostfi.io. Open the app and tap "Sign Up". Enter your email address, create a strong password, and agree to the terms of service. You will receive a verification code via email — enter it to confirm your account. Once confirmed, you can proceed to complete KYC verification and begin using HostFi.
+
+GUIDE 02: Completing KYC Verification
+KYC (Know Your Customer) verification is required before you can trade or withdraw funds. This is a regulatory requirement under Nigerian AML/CFT law. In the app, go to Settings > Verification. Submit your valid government-issued ID and complete the identity verification process. Verification is typically processed within a few hours. You will receive a notification once your KYC is approved. If you have issues, contact support via live chat, email (help@hostfi.io ), or Telegram (@HostFiApp).
+
+GUIDE 03: Depositing Nigerian Naira (NGN)
+To deposit NGN, open the HostFi app and navigate to your NGN wallet. Tap "Deposit" or "Add Money". The app will display a unique bank account number assigned to you. Copy this account number and use your banking app or USSD to transfer the desired amount. There are zero deposit fees — your full amount is credited. Deposits are usually instant in normal conditions. Important: The depositor name must match your HostFi account name. If your deposit has not arrived, contact support with your payment receipt.
+
+GUIDE 04: Withdrawing NGN to Your Bank Account
+To withdraw NGN, go to your NGN wallet and tap "Withdraw". Enter or select your bank account details — you can withdraw to ANY verified Nigerian bank account (Access, GTBank, Zenith, First Bank, UBA, etc.), but it must be in your name for security and compliance. Enter the amount, review any applicable fees, then confirm. Withdrawals are typically instant to a few minutes. You can save bank accounts for quick future withdrawals.
+
+GUIDE 05: Buying Cryptocurrency with Naira
+To buy crypto on HostFi, go to the Trade section and select "Buy". Choose the cryptocurrency you want (BTC, USDT, ETH, SOL, BNB, USDC, DOGE, TRX, SHIB, XLM, POL, etc.). Enter the amount in naira or the amount of crypto you want. The app will show the current rate — the rate shown is the rate you get, no hidden markups. Review and tap "Confirm Buy". The crypto appears in your wallet immediately. No P2P stress — direct transactions with competitive exchange rates.
+
+GUIDE 06: Selling Cryptocurrency for Naira
+To sell crypto, go to the Trade section and select "Sell". Choose the cryptocurrency you wish to sell. Enter the amount of crypto to sell or the naira amount you want to receive. The app displays the current rate transparently. Review and confirm. The naira proceeds are credited to your NGN wallet balance immediately, which you can then withdraw to your bank account.
+
+GUIDE 07: Swapping Between Cryptocurrencies (FREE)
+To swap one crypto for another, go to the Swap section. Select the asset you want to swap from (e.g., BTC) and the asset you want to receive (e.g., ETH). Enter the amount. The app shows the exchange rate in real time. All crypto swaps on HostFi are completely FREE — zero swap fees across all supported pairs. Review the details and tap "Confirm Swap". The swapped asset appears in your wallet within seconds. Instant execution with transparent pricing.
+
+GUIDE 08: Creating a Virtual Dollar Card
+To create a virtual card, navigate to the Cards section in the app. Tap "Create New Card". Choose between Visa or Mastercard. Select a card category: e-commerce, streaming, travel, or business. Your virtual card will be generated instantly with a card number, expiry date, and CVV. Typical creation fee is $1. Create different cards for different purposes — personal, business, subscriptions, shopping. Track all card transactions from a simple dashboard.
+
+GUIDE 09: Funding Your Virtual Card
+To fund your virtual card, go to Cards and select the card you want to fund. Tap "Fund Card". You can fund with naira or USDT/USDC directly from your HostFi wallet. Enter the amount and confirm. The card balance updates immediately.
+
+GUIDE 10: Using Your Virtual Card for Payments
+Your HostFi virtual card works everywhere Visa/Mastercard is accepted globally. Use it for online purchases on Amazon, Netflix, Spotify, subscriptions, flight bookings, travel, shopping, and more. Enter the card number, expiry date, and CVV when making purchases. The card also works with Apple Pay, Google Pay, and Samsung Pay for contactless payments. Use cases: pay for courses (Coursera, Udemy), subscribe to tools (ChatGPT Plus, Canva Pro, Adobe), shop internationally.
+
+GUIDE 11: Sending Money to Other HostFi Users (FREE)
+HostFi allows free transfers between users — zero fees, always. To send money, go to Transfers and enter the recipient's email, phone number, or username. Enter the amount and confirm. Delivery is instant. This is great for splitting subscriptions, sending money to friends and family, or group payments. No fees ever.
+
+GUIDE 12: Depositing Crypto from an External Wallet
+To deposit crypto from an external wallet (MetaMask, Trust Wallet, exchange, etc.), go to the specific crypto asset in your HostFi wallet and tap "Receive" or "Deposit". The app displays your unique deposit address and a QR code. Copy the address or scan the QR code from your external wallet. Important: Always verify you are sending the correct asset on the correct network (e.g., send ETH only on the Ethereum network). Sending the wrong asset or using the wrong network may result in permanent loss of funds.
+
+GUIDE 13: Withdrawing Crypto to an External Wallet
+To send crypto to an external wallet, navigate to the crypto asset and tap "Send" or "Withdraw". Enter the destination wallet address carefully. Enter the amount to send. The app displays the estimated network fee (this is a blockchain fee, not a HostFi fee). Review all details and double-check the destination address, then confirm. Crypto transactions are irreversible — if you send to the wrong address, the funds cannot be recovered.
+
+GUIDE 14: Enabling Two-Factor Authentication (2FA)
+Two-factor authentication adds an extra layer of security. HostFi supports 2FA via SMS, email, authenticator app, and PIN. Go to Settings > Security > Two-Factor Authentication. Choose your preferred method (authenticator app like Google Authenticator or Authy is recommended). Follow the setup prompts. Save your backup codes in a secure location — you will need them if you lose access to your authenticator.
+
+GUIDE 15: Resetting Your Password
+If you cannot remember your password, tap "Forgot Password" on the login screen. Enter the email address associated with your HostFi account. You will receive a password reset link via email. Click the link and create a new password. If you do not receive the email, check your spam folder. If you still cannot reset, contact support at help@hostfi.io .
+
+GUIDE 16: Understanding HostFi's Fee Structure
+HostFi has a simple, transparent fee structure: ZERO deposit fees — fund your wallet without charges. ZERO swap fees — trade between any crypto pairs for free. ZERO transfer fees — send money to other HostFi users for free. HostFi does not charge any fees for deposits or swaps. Fees apply only to fiat and cryptocurrency withdrawals. Exchange rates are competitive market rates shown upfront — the rate you see is the rate you get. Virtual card creation has a minimal fee (typically $1). There are no hidden fees or surprise deductions.
+
+GUIDE 17: Understanding Network Fees for Crypto Withdrawals
+When you withdraw or send crypto from HostFi, a blockchain network fee is charged. This fee goes to the blockchain miners or validators who process the transaction — it is not a HostFi fee. Network fees vary by blockchain and congestion. The network fee is displayed before you confirm any withdrawal.
+
+GUIDE 18: What to Do If Your Deposit Has Not Arrived
+If your deposit has not been credited: First, ensure the depositor name matches your HostFi account name (mismatched names are a common issue). Verify the transaction was successful in your banking app. If confirmed, contact support immediately via live chat, email (help@hostfi.io ), or Telegram (@HostFiApp). Provide the amount, the sending bank, the time of transfer, and a screenshot of the transfer receipt. Your funds are always safe — occasional delays may occur due to external infrastructure issues.
+
+GUIDE 19: What to Do If Your Withdrawal Is Delayed
+Withdrawals are typically instant to a few minutes. If your withdrawal has not arrived, check the transaction status in the app. Ensure your bank account is verified and in your name. If it shows completed but you haven't received it, contact your bank first. If the issue persists, open a support ticket via live chat or email (help@hostfi.io ) with the transaction reference number.
+
+GUIDE 20: Protecting Your Account from Scams
+Never share your password, 2FA codes, PIN, or OTP with anyone — HostFi support will never ask for these. Be wary of people in Telegram DMs claiming to be HostFi support or admins — official support is only available through the app, email (help@hostfi.io ), and Telegram (@HostFiApp). Do not click suspicious links promising free crypto, airdrops, or investment returns. If someone asks you to send crypto to "verify your wallet" or "unlock your account", it is a scam. Report suspicious activity to community admins.
+
+GUIDE 21: Managing Multiple Crypto Assets and Wallets
+Your HostFi wallet supports multiple currencies: NGN, BTC, USDT, ETH, SOL, BNB, USDC, DOGE, TRX, SHIB, XLM, POL, and more. Each asset has its own balance, deposit address, and transaction history. Fund wallets with fiat or crypto. Swap across currencies easily with zero fees. Track everything from one dashboard.
+
+GUIDE 22: How Exchange Rates Work on HostFi
+When buying or selling crypto, HostFi shows you competitive market rates upfront. The rate shown before you confirm is the EXACT rate you get. No "subject to change at checkout". No hidden markups or surprise deductions. Every transaction is logged and visible. For the most accurate rate, confirm the transaction promptly.
+
+GUIDE 23: Using HostFi on Multiple Devices
+Your HostFi account can be accessed from multiple devices and platforms: iOS (App Store), Android (Play Store), Web (https://hostfi.io), and Desktop. Simply download the app on your new device and log in. If you have 2FA enabled, you will need your authenticator to complete login. All data, balances, and history sync automatically across devices. HostFi is available 24/7.
+
+GUIDE 24: What Happens If I Send Crypto to the Wrong Address
+Cryptocurrency transactions are irreversible by design. If you send crypto to the wrong address, HostFi cannot reverse or recover the transaction. Always double-check the destination address before confirming any send or withdrawal. Use the QR code scanning feature when possible to avoid manual entry errors. If you sent to a wrong address that belongs to another HostFi user, contact support and they may be able to assist.
+
+GUIDE 25: App Crashes, Freezes, or Loading Issues
+If the HostFi app is not working properly: 1) Force close the app and reopen it. 2) Check your internet connection — switch between Wi-Fi and mobile data. 3) Update the app to the latest version from the App Store or Play Store. 4) Clear the app cache (Settings > Apps > HostFi > Clear Cache). 5) Restart your device. If the issue persists, contact support at help@hostfi.io  with your device model, OS version, and a description of the problem.
+
+GUIDE 26: Card Declined — Troubleshooting
+If your virtual card is declined: 1) Check your card balance — ensure you have sufficient funds. 2) Verify the merchant accepts Visa/Mastercard online payments. 3) Check that you entered the card number, expiry, and CVV correctly. 4) Some merchants may not support virtual cards — try an alternative merchant. 5) Ensure the card is funded. If the issue persists, contact HostFi support with the merchant name, amount, and error message.
+
+GUIDE 27: Using the Referral Program
+HostFi rewards users who refer new members. Share your unique referral link with friends and family. When a referred user signs up, completes KYC, and starts trading, both you and the referred user earn rewards. Check the Referral section in the app for current rewards and terms. Everyone benefits.
+
+GUIDE 28: Using HXP (HostFi Points)
+HXP is HostFi's rewards program. Earn points by: depositing funds, swapping crypto, logging in daily, making trades, and referring friends. To convert HXP to cash, go to the HXP section in your app and convert points to naira or crypto anytime. Note: The HXP rewards program is gradually wrapping up — earn while you still can.
+
+GUIDE 29: Virtual Card Use Cases and Categories
+HostFi virtual cards come in categories: e-commerce (online shopping on Amazon, eBay, etc.), streaming (Netflix, Spotify, Apple Music, YouTube Premium), travel (flight bookings, hotels, Airbnb), and business (software subscriptions, SaaS tools). Choose the right category for your needs. You can create multiple cards for different purposes. Cards work with Apple Pay, Google Pay, and Samsung Pay for contactless payments. Perfect for paying for courses (Coursera, Udemy), subscribing to tools (ChatGPT Plus, Canva Pro, Adobe), and international transactions.
+
+GUIDE 30: HostFi for Freelancers
+If you're a freelancer receiving international payments: 1) Have your client send USDT or other crypto to your HostFi deposit address. 2) Once received, swap to naira instantly — zero swap fees. 3) Withdraw to your Nigerian bank account — fast and reliable. No P2P stress, no long waits. Get paid Friday, spend Friday evening. You can also create a virtual dollar card to pay for work tools and subscriptions.
+
+GUIDE 31: Group Payments and Splitting Subscriptions
+For group payments (e.g., splitting Netflix, Spotify, or other subscriptions): 1) One person creates a virtual card on HostFi. 2) Friends send their share to that person using free HostFi transfers (via email, phone, or username). 3) The card is funded and the purchase is made. Zero transfer fees make this simple and cost-effective.
+
+GUIDE 32: Push Notifications and Alerts
+HostFi sends notifications for important account activity: deposits received, withdrawals processed, trades executed, card transactions, and security alerts. To manage notifications, go to Settings > Notifications. You can enable or disable specific categories. Keep security alerts enabled at all times for account protection.
+
+GUIDE 33: Updating Your Profile Information
+To update your profile, go to Settings > Profile. You can update your display name, profile photo, and notification preferences. Changing your registered email may require contacting support, as it is linked to your KYC verification. Contact support at help@hostfi.io  with your verification documents if needed.
+
+GUIDE 34: Contacting HostFi Support
+HostFi support is available via multiple channels: 1) Live chat in the app (fastest response). 2) Email: help@hostfi.io . 3) Telegram: @HostFiApp. 4) Phone support. 5) Telegram community: https://t.me/hostfiapp. For privacy inquiries: help@hostfi.io. Escalate to human support for complex KYC issues, large transaction disputes, security concerns, or technical issues the bot cannot resolve.
+
+GUIDE 35: Closing or Deactivating Your Account
+If you wish to close your HostFi account, first withdraw all your funds (both crypto and fiat) to external wallets or bank accounts. Then contact support through the app and request account closure. Account closure is permanent and all account data will be deleted in accordance with data protection regulations. HostFi retains personal data only as long as necessary for legal compliance. If you only want a temporary break, you can simply stop using the app without closing the account.

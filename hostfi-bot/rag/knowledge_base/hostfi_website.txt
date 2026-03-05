@@ -1,0 +1,95 @@
+HostFi (Host Finance) — Website Information
+=============================================
+
+About HostFi
+Name: HostFi (Host Finance)
+Legal Entity: HostFi Services Ltd
+Website: https://hostfi.io
+Purpose: A financial platform that makes buying, selling, trading, and managing crypto easy for Nigerians.
+Mission: Providing financial access for everyone (banked and unbanked) through zero-fee crypto services.
+
+HostFi is for people in Nigeria (expanding soon) who want an easy, fast, and secure way to trade, spend, and manage their crypto. Unlike many platforms, HostFi keeps things simple and affordable with no deposit fees, free swaps, fast withdrawals, and real utility through virtual cards and free transfers.
+
+Core Features
+
+1. Instant Buy & Sell with Naira — Buy crypto (BTC, USDT, ETH, SOL, BNB, USDC, etc.) using naira instantly. Sell crypto and get naira in your wallet immediately. No P2P stress — direct transactions. Competitive exchange rates. Zero deposit fees.
+
+2. Virtual Dollar Cards — Create multiple virtual cards (Mastercard or Visa). Fund with naira or USDT/USDC. Use for online payments globally (Netflix, Spotify, Amazon, shopping, subscriptions, travel bookings, etc.). Works with Apple Pay, Google Pay, Samsung Pay for contactless payments. Choose card categories (e-commerce, streaming, travel, business). Track all card transactions from a simple dashboard. Create different cards for different purposes (personal, business, subscriptions).
+
+3. Crypto Trading & Swaps — Free crypto swaps across all supported pairs — zero fees. Instant execution. Transparent pricing — the rate shown is the rate you get. No hidden markups. Supported cryptocurrencies: BTC, USDT, ETH, SOL, BNB, DOGE, USDC, TRX, SHIB, XLM, POL, and more.
+
+4. Multiple Wallets — Support for multiple currencies: NGN, BTC, USDT, ETH, SOL, BNB, USDC, and more. Fund wallets with fiat or crypto. Swap across currencies easily. Track everything from one dashboard.
+
+5. Secure & Instant Withdrawals — Withdraw to ANY verified bank account in Nigeria (Access, GTBank, Zenith, First Bank, UBA, etc.). Must be in your name for security. Fast, safe, and reliable. Save bank accounts for quick future withdrawals.
+
+6. Free Transfers Between HostFi Users — Send money to other HostFi users at zero cost. Use their email, phone number, or username. Instant delivery. No fees ever.
+
+7. HXP (HostFi Points) Rewards Program — The HXP program is gradually wrapping up — earn while you can. Ways to earn HXP: deposit funds, swap crypto, log in daily, make trades, refer friends. Benefits: convert points to cash or crypto anytime. Rewards loyalty and activity.
+
+8. Referral Program — Share your referral link with friends. When they join and start trading, both earn rewards. Everyone benefits.
+
+9. Multi-Layer Security — 2FA via SMS, email, authenticator app, and PIN. Withdrawals only to verified accounts in your name. Every transaction logged and visible. Advanced encryption protocols. HostFi incorporates industry-leading security measures for accounts and transactions.
+
+10. Customer Support — Available via live chat in app, email (help@hostfi.io), Telegram (@HostFiApp), and phone support. Active Telegram community for questions and updates.
+
+Zero Fees Policy (Unique Selling Points)
+Zero deposit fees — fund your wallet without charges.
+Zero swap fees — trade between any crypto pairs for free.
+Zero transfer fees — send money to other HostFi users free.
+HostFi does not charge any fees for deposits or swaps. Fees apply only to fiat and cryptocurrency withdrawals.
+
+Speed
+Instant buy/sell with naira. Instant withdrawals to bank accounts. Instant swaps between cryptocurrencies. Money moves in seconds, not days.
+
+Transparency
+Exchange rate shown upfront is the rate you get. No "subject to change at checkout". No hidden fees or surprise deductions. Every transaction logged and visible.
+
+Supported Cryptocurrencies
+Bitcoin (BTC), Tether (USDT), Ethereum (ETH), Solana (SOL), Binance Coin (BNB), USD Coin (USDC), Dogecoin (DOGE), Tron (TRX), Shiba Inu (SHIB), Stellar (XLM), Polygon (POL), and more. Additional cryptocurrencies are planned for future integration.
+
+Fiat currencies supported: Nigerian Naira (NGN).
+
+Pricing & Rates
+Deposit fees: ₦0 (zero).
+Swap fees: ₦0 (zero).
+Transfer fees (HostFi to HostFi): ₦0 (zero).
+Exchange rates: Competitive market rates, shown upfront.
+Virtual card creation: Minimal fee (typically $1).
+Withdrawal fees: Standard (check current rates in app).
+
+Common User Scenarios
+For Freelancers: Receive USDT payments from international clients, swap to naira instantly, withdraw to bank account. Get paid Friday, spend Friday evening.
+For Traders: Buy crypto with naira (no P2P needed), free swaps between any crypto pairs, hold stablecoins (USDT/USDC) for stability, sell and withdraw to bank when ready.
+For Online Shoppers: Create virtual dollar card, fund with naira or USDT, shop on Amazon, pay for subscriptions, book travel. Access global marketplace from Nigeria.
+For Students/International Payments: Send crypto cross-border easily, use virtual cards for international services, pay for courses (Coursera, Udemy), subscribe to tools (ChatGPT Plus, Canva Pro, Adobe).
+For Group Payments: Friends splitting subscriptions. One person creates virtual card, others send their share via free HostFi transfers. Card funded, purchase made.
+
+Platform Availability
+iOS: Available on App Store.
+Android: Available on Google Play Store — https://play.google.com/store/apps/details?id=com.hostfi.app
+Web: https://hostfi.io
+Desktop: Desktop app available.
+24/7 platform availability. Simple, user-friendly interface. Built for both beginners and active users.
+
+Social Media & Community
+Twitter/X: @HostFi_App — https://twitter.com/hostfi_app
+Instagram: @HostFi_App — https://www.instagram.com/hostfi_app/
+Facebook: HostFiapp — https://www.facebook.com/hostfinanceapp
+LinkedIn: Host Finance — https://www.linkedin.com/company/hostfinance/
+TikTok: Host Finance
+Telegram Community: HostFi App — https://t.me/hostfiapp
+
+Getting Started
+To get started with HostFi: 1) Download the HostFi app from the App Store or Google Play Store, or visit https://hostfi.io. 2) Sign up with your email and complete KYC verification. 3) Fund your wallet via bank transfer or crypto deposit. 4) Start trading, swapping, and spending.
+
+Customer Support
+For assistance, users can reach HostFi support through: the mobile app's live chat, email at help@hostfi.io, Telegram at @HostFiApp, or phone support. The Telegram community is also active for questions and updates.
+
+Brand Voice
+HostFi's tone is clear, friendly, and simple. Crypto doesn't have to be complicated. Buy, sell, swap, withdraw in seconds. Use crypto for everyday transactions. Zero fees for swaps, deposits, and transfers. Earn HXP points for activity. Multi-layer protection with verified withdrawals only.
+
+Legal & Compliance
+HostFi Services Ltd operates under the laws of the Federal Republic of Nigeria. HostFi maintains an Anti-Money Laundering & Combating the Financing of Terrorism (AML/CFT) Policy. KYC (Know Your Customer) and CDD (Customer Due Diligence) are required for all users. HostFi complies with the Money Laundering (Prohibition) Act, 2011 and Terrorism (Prevention) Act, 2011. Suspicious transactions are reported to the Nigerian Financial Intelligence Unit (NFIU). Users must be 13 years or older to use the service. Withdrawals are only allowed to bank accounts in the user's name for compliance and security purposes.
+
+Privacy
+HostFi collects personal data (email, name, phone, address) and usage data to provide and improve services. Data may be transferred to and processed in Nigeria. Users can request access, correction, or deletion of their personal data by contacting help@hostfi.io. HostFi uses cookies for session management, preferences, and security. Third-party analytics (Google Analytics) may be used.
