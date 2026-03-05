@@ -50,6 +50,7 @@ def setup_scheduler(application: Application) -> AsyncIOScheduler:
     - **price_alert_checker**: Checks active alerts every 5 minutes
     - **weekly_leaderboard**: Posts XP leaderboard Sundays at 12:00 PM WAT
     - **ticket_escalation**: Re-alerts unclaimed tickets every 30 minutes
+    - **daily_report**: Posts admin report to admin channel at 7:00 AM WAT
 
     Args:
         application: The telegram.ext.Application instance (needed to
@@ -97,6 +98,16 @@ def setup_scheduler(application: Application) -> AsyncIOScheduler:
         args=[application],
         id="ticket_escalation",
         name="Ticket Escalation Checker",
+        replace_existing=True,
+    )
+
+    # Daily admin report at 7:00 AM WAT
+    scheduler.add_job(
+        daily_report_job,
+        trigger=CronTrigger(hour=7, minute=0, timezone=WAT),
+        args=[application],
+        id="daily_report",
+        name="Daily Admin Report",
         replace_existing=True,
     )
 
@@ -325,3 +336,46 @@ async def ticket_escalation_job(application: Application) -> None:
 
     except Exception as exc:
         logger.error("Ticket escalation check failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Job: Daily Admin Report (7 AM WAT → admin channel)
+# ---------------------------------------------------------------------------
+
+
+async def daily_report_job(application: Application) -> None:
+    """
+    Post the daily admin report to the admin channel.
+
+    Called by APScheduler at 7:00 AM WAT every day.
+
+    Args:
+        application: The telegram.ext.Application instance
+    """
+    try:
+        from bot.handlers.admin import build_daily_report
+
+        report = await build_daily_report()
+
+        await application.bot.send_message(
+            chat_id=ADMIN_CHANNEL_ID,
+            text=report,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
+
+        logger.info("Daily admin report posted to admin channel")
+
+    except Exception as exc:
+        logger.error("Failed to post daily report: %s", exc)
+        try:
+            await application.bot.send_message(
+                chat_id=ADMIN_CHANNEL_ID,
+                text=(
+                    "⚠️ <b>Scheduler Alert</b>\n\n"
+                    f"Daily report failed to generate.\nError: <code>{exc}</code>"
+                ),
+                parse_mode="HTML",
+            )
+        except Exception as notify_exc:
+            logger.error("Failed to notify about report failure: %s", notify_exc)
