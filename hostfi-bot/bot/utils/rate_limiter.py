@@ -15,18 +15,23 @@ logger = logging.getLogger(__name__)
 _redis: Redis | None = None
 
 
-def get_redis() -> Redis:
+def get_redis() -> Redis | None:
     """
     Return the async Upstash Redis client singleton.
 
     Creates the client on first call.  Upstash Redis uses HTTP under the
     hood so there is no persistent connection to manage.
 
+    Returns None if Redis is not configured.
+
     Returns:
-        Async Redis client instance
+        Async Redis client instance, or None
     """
     global _redis
     if _redis is None:
+        if not UPSTASH_REDIS_URL or not UPSTASH_REDIS_TOKEN:
+            logger.info("Upstash Redis not configured — rate limiting disabled")
+            return None
         _redis = Redis(url=UPSTASH_REDIS_URL, token=UPSTASH_REDIS_TOKEN)
         logger.info("Upstash Redis client initialised")
     return _redis
@@ -63,6 +68,8 @@ async def check_rate_limit(
         True if within limits, False if rate-limited
     """
     redis = get_redis()
+    if redis is None:
+        return True  # No Redis — allow all requests
     key = f"rate:{action}:{user_id}"
 
     try:
@@ -107,6 +114,8 @@ async def get_rate_count(user_id: int, action: str = "command") -> int:
         Current count (0 if the key does not exist)
     """
     redis = get_redis()
+    if redis is None:
+        return 0
     key = f"rate:{action}:{user_id}"
 
     try:

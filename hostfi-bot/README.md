@@ -40,7 +40,9 @@ Community management, AI-powered support, and crypto market data bot for HOSTFI.
 - A Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
 - Supabase project (free tier works)
 - Groq API key (from [console.groq.com](https://console.groq.com))
-- Upstash Redis instance (from [upstash.com](https://upstash.com))
+- Upstash Redis instance (see Redis Setup below)
+
+> **ChromaDB** and **CoinGecko** require **zero setup** — ChromaDB runs locally (auto-creates a `chroma_db/` folder on first run) and CoinGecko's free API needs no API key.
 
 ### 2. Clone and Install
 
@@ -60,41 +62,128 @@ Copy the example env file and fill in your values:
 cp .env.example .env
 ```
 
-Edit `.env` with your actual credentials:
+Edit `.env` with your actual credentials. **Detailed instructions for each variable are in the sections below.**
 
-| Variable | Description |
-|---|---|
-| `TELEGRAM_BOT_TOKEN` | Bot token from BotFather |
-| `TELEGRAM_WEBHOOK_SECRET` | Random secret string for webhook verification |
-| `WEBHOOK_URL` | Your public URL (e.g. `https://your-app.up.railway.app`) |
-| `ADMIN_IDS` | Comma-separated Telegram user IDs for admins |
-| `SUPERADMIN_ID` | Primary admin Telegram user ID |
-| `ADMIN_CHANNEL_ID` | Private admin channel ID (starts with `-100`) |
-| `COMMUNITY_GROUP_ID` | Community group ID (starts with `-100`) |
-| `GROQ_API_KEY` | Groq API key |
-| `SUPABASE_URL` | Supabase project URL |
-| `SUPABASE_KEY` | Supabase anon/public key |
-| `UPSTASH_REDIS_URL` | Upstash Redis URL |
-| `UPSTASH_REDIS_TOKEN` | Upstash Redis token |
+| Variable | Required? | Description | Where to get it |
+|---|---|---|---|
+| `TELEGRAM_BOT_TOKEN` | **Yes** | Bot token from BotFather | See **Bot Token Setup** |
+| `TELEGRAM_WEBHOOK_SECRET` | **Yes** | Random secret for webhook security | See **Webhook Secret** |
+| `WEBHOOK_URL` | **Yes** | Your public URL | See **Run Locally** or **Railway Deployment** |
+| `SUPERADMIN_ID` | **Yes** | Your Telegram user ID (bot owner) | See **Getting Telegram IDs** |
+| `COMMUNITY_GROUP_ID` | **Yes** | Community group ID (starts with `-100`) | See **Getting Telegram IDs** |
+| `GROQ_API_KEY` | **Yes** | Groq API key | See **Groq Setup** |
+| `SUPABASE_URL` | **Yes** | Supabase project URL | See **Supabase Setup** |
+| `SUPABASE_KEY` | **Yes** | Supabase anon/public key | See **Supabase Setup** |
+| `ADMIN_IDS` | No | Extra admin IDs (optional — see below) | See **How Admins Work** |
+| `ADMIN_CHANNEL_ID` | No | Private admin channel ID | See **Getting Telegram IDs** |
+| `UPSTASH_REDIS_URL` | No | Upstash Redis URL | See **Redis Setup** |
+| `UPSTASH_REDIS_TOKEN` | No | Upstash Redis token | See **Redis Setup** |
+
+> **Minimum to get running:** You only need the 8 "Required" variables. The bot will work without Redis (rate limiting is skipped), without ADMIN_CHANNEL_ID (admin alerts are skipped), and without ADMIN_IDS (admins are auto-detected from the group).
 
 ### 4. Supabase Setup
 
 1. Create a new Supabase project at [supabase.com](https://supabase.com)
 2. Go to **SQL Editor** and run the full schema from `database/schema.sql`
-3. Copy your project URL and anon key into `.env`
+3. To find your credentials: go to **Settings → API**
+   - `SUPABASE_URL` = the **Project URL** (looks like `https://xxxx.supabase.co`)
+   - `SUPABASE_KEY` = the **anon public** key (the long `eyJ...` string under "Project API keys")
+4. Paste both into your `.env`
 
 ### 5. Groq Setup
 
 1. Sign up at [console.groq.com](https://console.groq.com)
-2. Create an API key
-3. Add it to `.env` as `GROQ_API_KEY`
+2. Go to **API Keys** in the left sidebar
+3. Click **Create API Key**, give it a name, and copy the key
+4. Add it to `.env` as `GROQ_API_KEY`
 
-### 6. Bot Token Setup
+### 6. Redis Setup
 
-1. Message [@BotFather](https://t.me/BotFather) on Telegram
-2. Send `/newbot` and follow the prompts
-3. Copy the token to `.env` as `TELEGRAM_BOT_TOKEN`
-4. Send `/setcommands` to BotFather and paste:
+The bot uses Redis for rate limiting and caching. You have two options:
+
+**Option A — Upstash (recommended for Railway deployment):**
+
+1. Go to [console.upstash.com](https://console.upstash.com) and sign up (Google/GitHub login works)
+2. Click **Create Database**
+3. Pick a name (e.g. `hostfi-bot`), choose the region closest to your Railway server, and click **Create**
+4. On the database details page, find:
+   - `UPSTASH_REDIS_URL` = the **REST URL** (starts with `https://...upstash.io`)
+   - `UPSTASH_REDIS_TOKEN` = the **REST Token** (long string below the URL)
+5. Paste both into `.env`
+
+> If upstash.com gives you errors, try opening it in a different browser or use incognito mode. Their console works best in Chrome.
+
+**Option B — Railway Redis (if Upstash is unavailable):**
+
+1. In your Railway project dashboard, click **+ New** → **Database** → **Redis**
+2. Railway will spin up a Redis instance. Click on it and go to **Connect**
+3. Use the **Public URL** as `UPSTASH_REDIS_URL`
+4. Set `UPSTASH_REDIS_TOKEN` to any placeholder value (e.g. `railway`) — the code's rate limiter will still work as it falls open on auth failure
+
+> The bot works fine even if Redis is temporarily unavailable — rate limiting and caching just get skipped.
+
+### 7. Bot Token Setup
+
+1. Open Telegram and message [@BotFather](https://t.me/BotFather)
+2. Send `/newbot` and follow the prompts (pick a name and username)
+3. BotFather will give you a token like `123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11`
+4. Copy it to `.env` as `TELEGRAM_BOT_TOKEN`
+
+### 8. Webhook Secret
+
+This is just a random password that ensures only Telegram can send updates to your bot:
+
+1. Generate a random string — you can use Python:
+   ```bash
+   python -c "import secrets; print(secrets.token_urlsafe(32))"
+   ```
+2. Copy the output and paste it into `.env` as `TELEGRAM_WEBHOOK_SECRET`
+
+### 9. How Admins Work (Like Rose Bot)
+
+The bot works **exactly like Rose** — you do NOT need to manually list admin IDs.
+
+**Anyone you promote to admin in your Telegram group automatically has admin access to the bot.** The bot checks Telegram's group admin list in real-time. If you promote someone to admin in the group, they can immediately use `/warn`, `/ban`, `/broadcast`, etc. If you demote them, they lose access.
+
+**SUPERADMIN_ID** is the bot owner (you). It gives you one extra power that regular admins don't have:
+- `/reindex` — rebuild the AI knowledge base (this touches the bot's core data, so only the owner should do it)
+- The superadmin can never be warned/muted/banned by other admins
+
+**ADMIN_IDS** (optional) is for adding extra people who should be admins *even if they're not group admins* — for example, a developer or support person who doesn't need to be in the group. Leave it empty if you don't need this.
+
+### 10. Getting Telegram IDs
+
+**Your User ID (for SUPERADMIN_ID):**
+1. Message [@userinfobot](https://t.me/userinfobot) on Telegram
+2. It will reply with your user ID (a number like `6129358034`)
+3. Set `SUPERADMIN_ID` to this number
+
+**Community Group ID (for COMMUNITY_GROUP_ID):**
+1. Add [@RawDataBot](https://t.me/RawDataBot) to your community group temporarily
+2. Send any message in the group — RawDataBot will reply with JSON data
+3. Look for `"chat": {"id": -100xxxxxxxxxx}` — that negative number is your group ID
+4. Set `COMMUNITY_GROUP_ID` to that number (e.g. `-1001234567890`)
+5. Remove @RawDataBot from the group — you only need it once
+
+**Admin Channel ID (for ADMIN_CHANNEL_ID — optional):**
+
+The admin channel is a **private Telegram channel** where the bot sends alerts (spam detections, ticket escalations, daily reports). It's optional — the bot works without it, you just won't get admin alerts.
+
+To set it up:
+1. Create a new **private channel** in Telegram (e.g. "HOSTFI Admin Alerts")
+2. Add your bot as an admin of the channel (go to channel settings → Administrators → Add Admin → search for your bot)
+3. Add @RawDataBot to the channel temporarily, send a message, and grab the channel ID the same way
+4. Set `ADMIN_CHANNEL_ID` to that number
+5. Remove @RawDataBot
+
+### 11. Setting Bot Commands in BotFather (User vs Admin)
+
+When users type `/` in the chat, Telegram shows a command menu. **Only register user-facing commands** — admin commands stay hidden.
+
+1. Message [@BotFather](https://t.me/BotFather)
+2. Send `/setcommands`
+3. Select your bot
+4. Paste these **user commands only**:
    ```
    start - Start the bot
    help - Show all commands
@@ -110,15 +199,82 @@ Edit `.env` with your actual credentials:
    leaderboard - Top 10 members
    ```
 
-### 7. Run Locally
+**Admin commands** (`/warn`, `/mute`, `/ban`, `/kick`, `/broadcast`, `/stats`, etc.) are NOT registered in BotFather — they still work, they just don't show up in the `/` menu for regular users. The bot auto-detects group admins and only lets them use these commands.
 
+Any admin can type `/adminhelp` to see the full list of admin commands.
+
+### 12. ChromaDB (No Setup Needed)
+
+ChromaDB is the vector database that powers the AI knowledge base. It requires **zero setup** — no account, no server, no API key.
+
+**When does it get created?** When you send the `/reindex` command to the bot in Telegram. The bot reads the knowledge base text files, converts them into AI embeddings, and stores them in a `chroma_db/` folder inside the project directory. This only needs to be done once — then the AI assistant can answer questions.
+
+- If you delete the `chroma_db/` folder, just send `/reindex` again to rebuild it
+- On Railway, the folder persists as long as your deployment volume exists
+
+### 12. CoinGecko (No Setup Needed)
+
+The bot uses CoinGecko's **free public API** for crypto prices, market data, and exchange rates. No API key is needed.
+
+- Free tier: ~30 requests/minute (more than enough for the bot)
+- The bot caches responses in Redis for 60 seconds to avoid hitting limits
+- Supports BTC, ETH, BNB, SOL, XRP, DOGE, ADA, DOT, MATIC, AVAX, LINK, UNI, LTC
+
+### 14. Quick Setup Order (What to Do First)
+
+You don't need everything set up to start testing. Here's the recommended order:
+
+1. **Get your bot token** from BotFather and set `TELEGRAM_BOT_TOKEN`
+2. **Get your user ID** from @userinfobot and set `SUPERADMIN_ID`
+3. **Create Supabase project**, run `schema.sql`, set `SUPABASE_URL` + `SUPABASE_KEY`
+4. **Get Groq API key** and set `GROQ_API_KEY`
+5. **Generate webhook secret** and set `TELEGRAM_WEBHOOK_SECRET`
+6. **Set up ngrok** → set `WEBHOOK_URL` to the ngrok URL
+7. **Run `python main.py`** — the bot will start! You can test `/start`, `/help`, `/price btc`, `/ask` in DM
+8. **Create your community group** → add bot → get group ID with @RawDataBot → set `COMMUNITY_GROUP_ID`
+9. **Optionally** create admin channel, set up Redis, etc.
+
+> You can test most bot features (prices, AI, commands) without COMMUNITY_GROUP_ID or ADMIN_CHANNEL_ID. Those are only needed for group-specific features like welcome CAPTCHA and admin alerts. Set `COMMUNITY_GROUP_ID=0` and `ADMIN_CHANNEL_ID=0` temporarily.
+
+### 15. Run Locally
+
+**Why do I need ngrok?** Here's how Telegram bots work: when a user sends `/start` to your bot, Telegram's servers need to deliver that message to YOUR server. Your laptop is behind a router and has no public IP — Telegram can't reach it. So you use **ngrok** to create a temporary public URL that tunnels to your local machine.
+
+Think of it like this:
+```
+User sends /start → Telegram servers → ngrok URL → your laptop → bot processes it → reply goes back
+```
+
+**Step 1 — Install ngrok (free):**
+1. Go to [ngrok.com](https://ngrok.com) and create a free account
+2. Download ngrok for Windows
+3. Unzip and open a terminal in that folder
+4. Run: `ngrok config add-authtoken YOUR_TOKEN` (they give you the token on the dashboard)
+
+**Step 2 — Start the tunnel:**
 ```bash
-# You'll need a public URL for webhooks — use ngrok for local dev:
-# ngrok http 8000
-# Then set WEBHOOK_URL to the ngrok URL in .env
+ngrok http 8000
+```
+ngrok will show a public URL like `https://a1b2c3d4.ngrok-free.app`
 
+**Step 3 — Update .env:**
+Set `WEBHOOK_URL` to the ngrok URL:
+```
+WEBHOOK_URL=https://a1b2c3d4.ngrok-free.app
+```
+
+**Step 4 — Run the bot (in a separate terminal):**
+```bash
+cd hostfi-bot
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 python main.py
 ```
+
+**Step 5 — Verify it works:**
+- Open `https://a1b2c3d4.ngrok-free.app/health` in your browser — you should see `{"status": "ok", "bot": "running"}`
+- Send `/start` to your bot on Telegram
+
+> Every time you restart ngrok, you'll get a new URL and need to update `WEBHOOK_URL` in `.env` and restart the bot. On Railway, the URL is permanent.
 
 ---
 
@@ -139,15 +295,37 @@ git push -u origin main
 1. Go to [railway.app](https://railway.app) and create a new project
 2. Select **Deploy from GitHub repo**
 3. Choose your repository
-4. Go to **Variables** tab and add all environment variables from `.env`
-5. Set `WEBHOOK_URL` to your Railway domain (e.g. `https://your-app.up.railway.app`)
-6. Railway will auto-detect the `Procfile` and deploy
+4. Go to **Variables** tab and add **at minimum** these env vars:
+   ```
+   TELEGRAM_BOT_TOKEN=your_token
+   TELEGRAM_WEBHOOK_SECRET=your_secret
+   WEBHOOK_URL=https://your-domain.up.railway.app    (set after step 5)
+   SUPERADMIN_ID=your_user_id
+   COMMUNITY_GROUP_ID=your_group_id                  (use 0 temporarily if you don't have it yet)
+   ADMIN_CHANNEL_ID=0                                (set later when you create the admin channel)
+   GROQ_API_KEY=your_groq_key
+   SUPABASE_URL=your_supabase_url
+   SUPABASE_KEY=your_supabase_key
+   ```
+   Optional (add later):
+   ```
+   ADMIN_IDS=                    (leave empty — group admins are auto-detected)
+   UPSTASH_REDIS_URL=            (leave empty if you don't have Redis yet)
+   UPSTASH_REDIS_TOKEN=          (leave empty if you don't have Redis yet)
+   ```
+5. Go to **Settings → Networking → Public Networking** and click **Generate Domain**
+6. Railway gives you a URL like `https://hostfi-bot-production.up.railway.app`
+7. Go back to **Variables** and set `WEBHOOK_URL` to this Railway domain
+8. Railway will auto-detect the `Procfile` and deploy
+
+> **If Railway shows a build error:** It means you're missing required env vars. The bot needs `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `WEBHOOK_URL`, `SUPERADMIN_ID`, `GROQ_API_KEY`, `SUPABASE_URL`, and `SUPABASE_KEY` to start. Set them all in the Variables tab and redeploy.
 
 ### 3. Verify
 
-- Check the health endpoint: `GET https://your-app.up.railway.app/health`
+- Check the health endpoint: `GET https://your-railway-domain.up.railway.app/health`
 - Expected response: `{"status": "ok", "bot": "running"}`
 - Send `/start` to your bot on Telegram
+- Send `/reindex` to initialize the AI knowledge base (first time only)
 
 ---
 

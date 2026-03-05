@@ -42,7 +42,7 @@ async def stats_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not is_admin(update.effective_user.id):
+        if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
                 "⛔ This command is for admins only."
             )
@@ -216,7 +216,7 @@ async def lookup_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not is_admin(update.effective_user.id):
+        if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
                 "⛔ This command is for admins only."
             )
@@ -352,7 +352,7 @@ async def reindex_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not is_superadmin(update.effective_user.id):
+        if not await is_superadmin(update.effective_user.id):
             await update.effective_message.reply_text(
                 "⛔ This command is for the superadmin only."
             )
@@ -413,7 +413,7 @@ async def adminhelp_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not is_admin(update.effective_user.id):
+        if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
                 "⛔ This command is for admins only."
             )

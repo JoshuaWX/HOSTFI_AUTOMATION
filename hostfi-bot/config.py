@@ -75,10 +75,13 @@ WEBHOOK_URL: str = _require_env("WEBHOOK_URL")
 # ---------------------------------------------------------------------------
 # Admin
 # ---------------------------------------------------------------------------
-ADMIN_IDS: list[int] = _parse_int_list(_require_env("ADMIN_IDS"))
+_raw_admin_ids = os.getenv("ADMIN_IDS", "")
+ADMIN_IDS: list[int] = _parse_int_list(_raw_admin_ids) if _raw_admin_ids.strip() else []
 SUPERADMIN_ID: int = int(_require_env("SUPERADMIN_ID"))
-ADMIN_CHANNEL_ID: int = int(_require_env("ADMIN_CHANNEL_ID"))
-COMMUNITY_GROUP_ID: int = int(_require_env("COMMUNITY_GROUP_ID"))
+_raw_admin_channel = os.getenv("ADMIN_CHANNEL_ID", "")
+ADMIN_CHANNEL_ID: int = int(_raw_admin_channel) if _raw_admin_channel.strip() else 0
+_raw_community_group = os.getenv("COMMUNITY_GROUP_ID", "")
+COMMUNITY_GROUP_ID: int = int(_raw_community_group) if _raw_community_group.strip() else 0
 
 # ---------------------------------------------------------------------------
 # Groq AI
@@ -92,10 +95,10 @@ SUPABASE_URL: str = _require_env("SUPABASE_URL")
 SUPABASE_KEY: str = _require_env("SUPABASE_KEY")
 
 # ---------------------------------------------------------------------------
-# Upstash Redis
+# Upstash Redis (optional — bot works without it, rate limiting is skipped)
 # ---------------------------------------------------------------------------
-UPSTASH_REDIS_URL: str = _require_env("UPSTASH_REDIS_URL")
-UPSTASH_REDIS_TOKEN: str = _require_env("UPSTASH_REDIS_TOKEN")
+UPSTASH_REDIS_URL: str = os.getenv("UPSTASH_REDIS_URL", "")
+UPSTASH_REDIS_TOKEN: str = os.getenv("UPSTASH_REDIS_TOKEN", "")
 
 # ---------------------------------------------------------------------------
 # Application

@@ -149,13 +149,14 @@ async def _cached_get(url: str, params: dict[str, str] | None = None) -> Any:
     cache_key = f"mkt:{url}:{_json.dumps(params or {}, sort_keys=True)}"
 
     # Try cache first
-    try:
-        cached = await redis.get(cache_key)
-        if cached is not None:
-            data = cached if isinstance(cached, str) else str(cached)
-            return _json.loads(data)
-    except Exception as exc:
-        logger.debug("Cache read miss or error: %s", exc)
+    if redis is not None:
+        try:
+            cached = await redis.get(cache_key)
+            if cached is not None:
+                data = cached if isinstance(cached, str) else str(cached)
+                return _json.loads(data)
+        except Exception as exc:
+            logger.debug("Cache read miss or error: %s", exc)
 
     # Fetch from API
     async with httpx.AsyncClient(timeout=15.0) as client:
@@ -164,10 +165,11 @@ async def _cached_get(url: str, params: dict[str, str] | None = None) -> Any:
         data = resp.json()
 
     # Write to cache (fire-and-forget, swallow errors)
-    try:
-        await redis.set(cache_key, _json.dumps(data), ex=CACHE_TTL)
-    except Exception as exc:
-        logger.debug("Cache write error: %s", exc)
+    if redis is not None:
+        try:
+            await redis.set(cache_key, _json.dumps(data), ex=CACHE_TTL)
+        except Exception as exc:
+            logger.debug("Cache write error: %s", exc)
 
     return data
 

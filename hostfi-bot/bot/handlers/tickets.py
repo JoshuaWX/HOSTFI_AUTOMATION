@@ -250,7 +250,7 @@ async def ticket_claim_callback(
     if not query or not query.data:
         return
 
-    if not is_admin(query.from_user.id):
+    if not await is_admin(query.from_user.id, bot=context.bot):
         await query.answer("⛔ Admins only.", show_alert=True)
         return
 
@@ -333,7 +333,7 @@ async def reply_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not is_admin(update.effective_user.id):
+        if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
                 "⛔ This command is for admins only."
             )
@@ -432,7 +432,7 @@ async def close_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not is_admin(update.effective_user.id):
+        if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
                 "⛔ This command is for admins only."
             )
@@ -637,7 +637,7 @@ async def tickets_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not is_admin(update.effective_user.id):
+        if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
                 "⛔ This command is for admins only."
             )

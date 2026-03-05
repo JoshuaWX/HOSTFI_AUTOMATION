@@ -33,6 +33,9 @@ from database.users import add_xp, get_or_create_user, is_user_verified, verify_
 
 logger = logging.getLogger(__name__)
 
+# In-memory fallback when Redis is not configured
+_captcha_store: dict[str, str] = {}
+
 # ---------------------------------------------------------------------------
 # Shared permission sets
 # ---------------------------------------------------------------------------
@@ -121,11 +124,11 @@ async def new_member_handler(
 
             # Store correct answer in Redis (5-minute TTL)
             redis = get_redis()
-            await redis.set(
-                f"captcha:{member.id}:{chat_id}",
-                str(correct),
-                ex=300,
-            )
+            captcha_key = f"captcha:{member.id}:{chat_id}"
+            if redis is not None:
+                await redis.set(captcha_key, str(correct), ex=300)
+            else:
+                _captcha_store[captcha_key] = str(correct)
 
             # Build and send welcome + CAPTCHA
             name = member.first_name or "friend"
@@ -210,7 +213,11 @@ async def verification_callback(
 
     chat_id = query.message.chat.id
     redis = get_redis()
-    correct_raw = await redis.get(f"captcha:{target_user_id}:{chat_id}")
+    captcha_key = f"captcha:{target_user_id}:{chat_id}"
+    if redis is not None:
+        correct_raw = await redis.get(captcha_key)
+    else:
+        correct_raw = _captcha_store.get(captcha_key)
 
     if correct_raw is None:
         await query.answer(
@@ -230,7 +237,10 @@ async def verification_callback(
                 permissions=MEMBER_PERMISSIONS,
             )
             await verify_user(target_user_id)
-            await redis.delete(f"captcha:{target_user_id}:{chat_id}")
+            if redis is not None:
+                await redis.delete(captcha_key)
+            else:
+                _captcha_store.pop(captcha_key, None)
 
             # Cancel the timeout job
             jobs = context.job_queue.get_jobs_by_name(
@@ -294,14 +304,20 @@ async def _verification_timeout(
 
     redis = get_redis()
     captcha_key = f"captcha:{user_id}:{chat_id}"
-    still_pending = await redis.get(captcha_key)
+    if redis is not None:
+        still_pending = await redis.get(captcha_key)
+    else:
+        still_pending = _captcha_store.get(captcha_key)
 
     if still_pending is not None:
         try:
             # Ban + immediate unban = kick (user can rejoin via link)
             await context.bot.ban_chat_member(chat_id, user_id)
             await context.bot.unban_chat_member(chat_id, user_id)
-            await redis.delete(captcha_key)
+            if redis is not None:
+                await redis.delete(captcha_key)
+            else:
+                _captcha_store.pop(captcha_key, None)
 
             # Edit the original CAPTCHA message
             try:
@@ -389,7 +405,7 @@ async def group_message_filter(
         return
 
     # Admins bypass all message filters
-    if is_admin(user.id):
+    if await is_admin(user.id, bot=context.bot):
         return
 
     chat_id = update.effective_chat.id

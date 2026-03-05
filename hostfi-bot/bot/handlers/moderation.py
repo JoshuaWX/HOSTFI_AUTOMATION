@@ -183,7 +183,7 @@ async def warn_command(
         update: Incoming Telegram update
         context: Bot context
     """
-    if not is_admin(update.effective_user.id):
+    if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."
         )
@@ -206,7 +206,7 @@ async def warn_command(
 
     target, reason = result
 
-    if is_admin(target.id):
+    if await is_admin(target.id, bot=context.bot):
         await update.message.reply_text("⛔ Cannot warn an admin.")
         return
 
@@ -291,7 +291,7 @@ async def mute_command(
         update: Incoming Telegram update
         context: Bot context
     """
-    if not is_admin(update.effective_user.id):
+    if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."
         )
@@ -347,7 +347,7 @@ async def mute_command(
         )
         return
 
-    if is_admin(target.id):
+    if await is_admin(target.id, bot=context.bot):
         await update.message.reply_text("⛔ Cannot mute an admin.")
         return
 
@@ -417,7 +417,7 @@ async def unmute_command(
         update: Incoming Telegram update
         context: Bot context
     """
-    if not is_admin(update.effective_user.id):
+    if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."
         )
@@ -485,7 +485,7 @@ async def ban_command(
         update: Incoming Telegram update
         context: Bot context
     """
-    if not is_admin(update.effective_user.id):
+    if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."
         )
@@ -508,7 +508,7 @@ async def ban_command(
 
     target, reason = result
 
-    if is_admin(target.id):
+    if await is_admin(target.id, bot=context.bot):
         await update.message.reply_text("⛔ Cannot ban an admin.")
         return
 
@@ -565,7 +565,7 @@ async def unban_command(
         update: Incoming Telegram update
         context: Bot context
     """
-    if not is_admin(update.effective_user.id):
+    if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."
         )
@@ -633,7 +633,7 @@ async def kick_command(
         update: Incoming Telegram update
         context: Bot context
     """
-    if not is_admin(update.effective_user.id):
+    if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."
         )
@@ -656,7 +656,7 @@ async def kick_command(
 
     target, reason = result
 
-    if is_admin(target.id):
+    if await is_admin(target.id, bot=context.bot):
         await update.message.reply_text("⛔ Cannot kick an admin.")
         return
 
@@ -712,7 +712,7 @@ async def pin_command(
         update: Incoming Telegram update
         context: Bot context
     """
-    if not is_admin(update.effective_user.id):
+    if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."
         )
@@ -798,7 +798,7 @@ async def announce_command(
         update: Incoming Telegram update
         context: Bot context
     """
-    if not is_admin(update.effective_user.id):
+    if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."
         )
