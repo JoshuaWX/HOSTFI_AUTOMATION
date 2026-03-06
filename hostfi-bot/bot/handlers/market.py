@@ -75,7 +75,7 @@ COIN_SYMBOLS: dict[str, str] = {
 
 RATES_COINS = "bitcoin,ethereum,tether,solana,binancecoin,usd-coin"
 
-CACHE_TTL = 60  # seconds
+CACHE_TTL = 120  # seconds — longer cache to avoid CoinGecko 429s on shared IPs
 
 FEAR_EMOJIS: dict[str, str] = {
     "Extreme Fear": "😱",
@@ -158,9 +158,13 @@ async def _cached_get(url: str, params: dict[str, str] | None = None) -> Any:
         except Exception as exc:
             logger.debug("Cache read miss or error: %s", exc)
 
-    # Fetch from API
+    # Fetch from API (retry once on 429)
     async with httpx.AsyncClient(timeout=15.0) as client:
         resp = await client.get(url, params=params)
+        if resp.status_code == 429:
+            import asyncio
+            await asyncio.sleep(2)
+            resp = await client.get(url, params=params)
         resp.raise_for_status()
         data = resp.json()
 
