@@ -123,6 +123,11 @@ def _register_command_handlers(app: Application) -> None:
 
     app.add_handler(CommandHandler("start", start_command))
 
+    # /help command
+    from bot.handlers.community import help_command
+
+    app.add_handler(CommandHandler("help", help_command))
+
     # M1: Moderation commands
     from bot.handlers.moderation import (
         announce_command,

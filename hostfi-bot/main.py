@@ -58,6 +58,21 @@ async def lifespan(app: FastAPI):
     logger.info("Webhook set: %s", webhook_url)
 
     setup_scheduler(_bot_app)
+
+    # Auto-index knowledge base if ChromaDB is empty (Railway wipes filesystem on redeploy)
+    try:
+        from rag.ingestion import get_collection, run_ingestion
+
+        collection = get_collection()
+        if collection.count() == 0:
+            logger.info("Knowledge base is empty — auto-indexing from local files...")
+            summary = await run_ingestion()
+            logger.info("Auto-indexing complete: %s", summary)
+        else:
+            logger.info("Knowledge base has %d chunks — skipping auto-index", collection.count())
+    except Exception as exc:
+        logger.warning("Auto-indexing failed (non-fatal): %s", exc)
+
     logger.info("HOSTFI Bot started successfully")
 
     yield

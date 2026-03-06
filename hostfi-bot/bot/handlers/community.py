@@ -578,3 +578,37 @@ async def help_callback(
         "/leaderboard — Top 10 members\n"
     )
     await query.message.reply_text(help_text, parse_mode="HTML")
+
+
+# ---------------------------------------------------------------------------
+# /help command
+# ---------------------------------------------------------------------------
+
+HELP_TEXT = (
+    "📚 <b>HOSTFI Bot Commands</b>\n\n"
+    "<b>General:</b>\n"
+    "/start — Start the bot\n"
+    "/help — Show this help menu\n"
+    "/rules — Community rules\n\n"
+    "<b>Market Data:</b>\n"
+    "/price [coin] — Live crypto price\n"
+    "/rates — Exchange rates\n"
+    "/market — Top 10 by market cap\n"
+    "/fear — Fear &amp; Greed Index\n"
+    "/alert — Manage price alerts\n\n"
+    "<b>AI &amp; Support:</b>\n"
+    "/ask [question] — Ask the AI assistant\n"
+    "/support — Open a support ticket\n\n"
+    "<b>Community:</b>\n"
+    "/rank — Your XP and rank\n"
+    "/leaderboard — Top 10 members\n"
+)
+
+
+async def help_command(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """Handle /help — display available commands."""
+    if not update.effective_message:
+        return
+    await update.effective_message.reply_text(HELP_TEXT, parse_mode="HTML")
