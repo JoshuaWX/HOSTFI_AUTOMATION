@@ -236,45 +236,51 @@ You don't need everything set up to start testing. Here's the recommended order:
 
 > You can test most bot features (prices, AI, commands) without COMMUNITY_GROUP_ID or ADMIN_CHANNEL_ID. Those are only needed for group-specific features like welcome CAPTCHA and admin alerts. Set `COMMUNITY_GROUP_ID=0` and `ADMIN_CHANNEL_ID=0` temporarily.
 
-### 15. Run Locally
+### 15. Run Locally (Optional — Skip If Using Railway)
 
-**Why do I need ngrok?** Here's how Telegram bots work: when a user sends `/start` to your bot, Telegram's servers need to deliver that message to YOUR server. Your laptop is behind a router and has no public IP — Telegram can't reach it. So you use **ngrok** to create a temporary public URL that tunnels to your local machine.
+**You do NOT need to run locally.** If you're deploying on Railway, skip this entire section — just push your code to GitHub, set env vars in Railway's dashboard, and test directly on Telegram. Railway gives you a permanent public URL.
 
-Think of it like this:
+This section is only for developers who want to test changes on their own machine before pushing to Railway.
+
+<details>
+<summary>Click to expand local development instructions</summary>
+
+**Why ngrok?** Telegram bots need a public URL — when someone sends `/start`, Telegram's servers forward the message to your server. Your laptop has no public IP, so ngrok creates a temporary tunnel.
+
 ```
-User sends /start → Telegram servers → ngrok URL → your laptop → bot processes it → reply goes back
+User sends /start → Telegram servers → ngrok URL → your laptop → bot processes it → reply
 ```
 
 **Step 1 — Install ngrok (free):**
 1. Go to [ngrok.com](https://ngrok.com) and create a free account
-2. Download ngrok for Windows
-3. Unzip and open a terminal in that folder
-4. Run: `ngrok config add-authtoken YOUR_TOKEN` (they give you the token on the dashboard)
+2. Download ngrok for Windows, unzip it
+3. Run: `ngrok config add-authtoken YOUR_TOKEN`
 
 **Step 2 — Start the tunnel:**
 ```bash
 ngrok http 8000
 ```
-ngrok will show a public URL like `https://a1b2c3d4.ngrok-free.app`
+ngrok shows a public URL like `https://a1b2c3d4.ngrok-free.app`
 
 **Step 3 — Update .env:**
-Set `WEBHOOK_URL` to the ngrok URL:
 ```
 WEBHOOK_URL=https://a1b2c3d4.ngrok-free.app
 ```
 
-**Step 4 — Run the bot (in a separate terminal):**
+**Step 4 — Run the bot:**
 ```bash
 cd hostfi-bot
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
+.venv\Scripts\activate
 python main.py
 ```
 
-**Step 5 — Verify it works:**
-- Open `https://a1b2c3d4.ngrok-free.app/health` in your browser — you should see `{"status": "ok", "bot": "running"}`
+**Step 5 — Verify:**
+- Open `https://a1b2c3d4.ngrok-free.app/health` in browser — should show `{"status": "ok", "bot": "running"}`
 - Send `/start` to your bot on Telegram
 
-> Every time you restart ngrok, you'll get a new URL and need to update `WEBHOOK_URL` in `.env` and restart the bot. On Railway, the URL is permanent.
+> Every ngrok restart gives a new URL. On Railway, the URL is permanent — no need for any of this.
+
+</details>
 
 ---
 

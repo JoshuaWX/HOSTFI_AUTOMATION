@@ -7,6 +7,7 @@ Author: HOSTFI Bot Team
 import asyncio
 import logging
 import signal
+from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request, Response
@@ -28,6 +29,60 @@ from scheduler.tasks import setup_scheduler, shutdown_scheduler
 setup_logging()
 logger = logging.getLogger(__name__)
 
+# Application instance (initialised on startup)
+_bot_app = None
+
+
+# ---------------------------------------------------------------------------
+# Lifespan
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown logic for the FastAPI application."""
+    global _bot_app
+
+    # ---- Startup ----
+    logger.info("Starting HOSTFI Bot...")
+
+    _bot_app = build_application()
+    await _bot_app.initialize()
+
+    webhook_url = f"{WEBHOOK_URL}/webhook"
+    await _bot_app.bot.set_webhook(
+        url=webhook_url,
+        secret_token=TELEGRAM_WEBHOOK_SECRET,
+        allowed_updates=Update.ALL_TYPES,
+    )
+    logger.info("Webhook set: %s", webhook_url)
+
+    setup_scheduler(_bot_app)
+    logger.info("HOSTFI Bot started successfully")
+
+    yield
+
+    # ---- Shutdown ----
+    logger.info("Shutting down HOSTFI Bot...")
+
+    shutdown_scheduler()
+
+    if _bot_app:
+        try:
+            await _bot_app.bot.delete_webhook()
+            logger.info("Webhook deleted")
+        except Exception as exc:
+            logger.error("Error deleting webhook: %s", exc)
+
+        try:
+            await _bot_app.shutdown()
+            logger.info("Bot application shut down")
+        except Exception as exc:
+            logger.error("Error shutting down bot: %s", exc)
+
+    logger.info("HOSTFI Bot shutdown complete")
+
+
 # ---------------------------------------------------------------------------
 # FastAPI app
 # ---------------------------------------------------------------------------
@@ -36,10 +91,8 @@ app = FastAPI(
     description="HOSTFI Telegram Community Management & AI Support Bot",
     docs_url=None,
     redoc_url=None,
+    lifespan=lifespan,
 )
-
-# Application instance (initialised on startup)
-_bot_app = None
 
 
 # ---------------------------------------------------------------------------
@@ -81,67 +134,7 @@ async def webhook_handler(request: Request) -> Response:
     return Response(status_code=200)
 
 
-# ---------------------------------------------------------------------------
-# Startup
-# ---------------------------------------------------------------------------
 
-
-@app.on_event("startup")
-async def on_startup():
-    """
-    Initialize the bot application, set the webhook, and start the scheduler.
-    """
-    global _bot_app
-
-    logger.info("Starting HOSTFI Bot...")
-
-    # Build the bot application with all handlers
-    _bot_app = build_application()
-    await _bot_app.initialize()
-
-    # Set the webhook
-    webhook_url = f"{WEBHOOK_URL}/webhook"
-    await _bot_app.bot.set_webhook(
-        url=webhook_url,
-        secret_token=TELEGRAM_WEBHOOK_SECRET,
-        allowed_updates=Update.ALL_TYPES,
-    )
-    logger.info("Webhook set: %s", webhook_url)
-
-    # Start the scheduler
-    setup_scheduler(_bot_app)
-
-    logger.info("HOSTFI Bot started successfully")
-
-
-# ---------------------------------------------------------------------------
-# Shutdown
-# ---------------------------------------------------------------------------
-
-
-@app.on_event("shutdown")
-async def on_shutdown():
-    """Gracefully shut down the bot, scheduler, and webhook."""
-    global _bot_app
-
-    logger.info("Shutting down HOSTFI Bot...")
-
-    shutdown_scheduler()
-
-    if _bot_app:
-        try:
-            await _bot_app.bot.delete_webhook()
-            logger.info("Webhook deleted")
-        except Exception as exc:
-            logger.error("Error deleting webhook: %s", exc)
-
-        try:
-            await _bot_app.shutdown()
-            logger.info("Bot application shut down")
-        except Exception as exc:
-            logger.error("Error shutting down bot: %s", exc)
-
-    logger.info("HOSTFI Bot shutdown complete")
 
 
 # ---------------------------------------------------------------------------
