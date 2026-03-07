@@ -22,7 +22,7 @@ PHISHING_DOMAINS: list[str] = [
     "hostfiapp.xyz",
     "hostfi-exchange.net",
     "hostfi-bonus.com",
-    "hostfi.io",
+    "hostfi.com",
     "hostfii.com",
     "h0stfi.com",
     "hostfii.app",

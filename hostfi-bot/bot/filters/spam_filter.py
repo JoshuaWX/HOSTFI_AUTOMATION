@@ -52,8 +52,7 @@ SPAM_KEYWORDS: list[str] = [
 
 # Domains allowed in messages (case-insensitive comparison)
 WHITELISTED_DOMAINS: list[str] = [
-    "hostfi.app",
-    "hostfi.com",
+    "hostfi.io",
     "coingecko.com",
     "coinmarketcap.com",
     "telegram.org",
