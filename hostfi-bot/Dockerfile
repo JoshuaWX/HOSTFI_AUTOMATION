@@ -6,11 +6,11 @@ WORKDIR /app
 RUN pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu
 
 # Install remaining dependencies
-COPY hostfi-bot/requirements.txt .
+COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY hostfi-bot/ .
+COPY . .
 
 EXPOSE 8000
 
