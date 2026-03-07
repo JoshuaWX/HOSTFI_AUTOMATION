@@ -28,7 +28,7 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 "📲 Download HOSTFI App",
-                url="https://hostfi.app",
+                url="https://hostfi.io",
             ),
         ],
         [
