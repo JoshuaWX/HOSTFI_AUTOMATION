@@ -10,6 +10,7 @@ from datetime import datetime, timezone, timedelta
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
+from telegram import LinkPreviewOptions
 from telegram.ext import Application
 
 from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_ID
@@ -152,7 +153,7 @@ async def daily_digest_job(application: Application) -> None:
             chat_id=COMMUNITY_GROUP_ID,
             text=digest,
             parse_mode="HTML",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
 
         logger.info("Daily digest posted to community group")
@@ -249,7 +250,7 @@ async def price_alert_checker_job(application: Application) -> None:
                         chat_id=user_id,
                         text=msg,
                         parse_mode="HTML",
-                        disable_web_page_preview=True,
+                        link_preview_options=LinkPreviewOptions(is_disabled=True),
                     )
                 except Exception as send_exc:
                     logger.warning(
@@ -293,7 +294,7 @@ async def weekly_leaderboard_job(application: Application) -> None:
             chat_id=COMMUNITY_GROUP_ID,
             text=leaderboard_msg,
             parse_mode="HTML",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
 
         logger.info("Weekly leaderboard posted to community group")
@@ -361,7 +362,7 @@ async def daily_report_job(application: Application) -> None:
             chat_id=ADMIN_CHANNEL_ID,
             text=report,
             parse_mode="HTML",
-            disable_web_page_preview=True,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
 
         logger.info("Daily admin report posted to admin channel")

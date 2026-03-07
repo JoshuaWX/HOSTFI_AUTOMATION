@@ -10,7 +10,7 @@ import re
 import uuid
 from datetime import datetime, timedelta, timezone
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update
 from telegram.ext import ContextTypes, ConversationHandler, filters
 
 from bot.utils.keyboards import confirm_broadcast_keyboard
@@ -461,7 +461,7 @@ async def broadcast_confirm_callback(
                 chat_id=COMMUNITY_GROUP_ID,
                 text=broadcast_data["text"],
                 parse_mode="HTML",
-                disable_web_page_preview=True,
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         elif btype == "photo":
             await context.bot.send_photo(
