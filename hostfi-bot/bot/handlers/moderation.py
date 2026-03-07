@@ -23,6 +23,7 @@ from bot.utils.formatter import (
     format_unmute,
     format_warn,
 )
+from bot.utils.auto_delete import schedule_delete
 from bot.utils.permissions import is_admin
 from bot.utils.rate_limiter import check_rate_limit
 from config import COMMUNITY_GROUP_ID
@@ -239,12 +240,13 @@ async def warn_command(
                 reason=f"Auto-ban: reached {warn_count} warnings",
             )
             name = _display_name(target)
-            await update.message.reply_text(
+            msg = await update.message.reply_text(
                 format_ban(
                     name, f"Auto-ban: {warn_count} warnings reached"
                 ),
                 parse_mode="HTML",
             )
+            await schedule_delete(msg, context, 15)
             logger.info(
                 "User %s auto-banned after %s warnings",
                 target.id,
@@ -252,10 +254,11 @@ async def warn_command(
             )
         else:
             name = _display_name(target)
-            await update.message.reply_text(
+            msg = await update.message.reply_text(
                 format_warn(name, reason, warn_count),
                 parse_mode="HTML",
             )
+            await schedule_delete(msg, context, 15)
             logger.info(
                 "User %s warned (%s/3) by admin %s",
                 target.id,
@@ -380,10 +383,11 @@ async def mute_command(
         )
 
         name = _display_name(target)
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             format_mute(name, label, reason),
             parse_mode="HTML",
         )
+        await schedule_delete(msg, context, 15)
         logger.info(
             "User %s muted for %s by admin %s",
             target.id,
@@ -449,10 +453,11 @@ async def unmute_command(
         )
 
         name = _display_name(target)
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             format_unmute(name),
             parse_mode="HTML",
         )
+        await schedule_delete(msg, context, 15)
         logger.info(
             "User %s unmuted by admin %s",
             target.id,
@@ -529,10 +534,11 @@ async def ban_command(
         )
 
         name = _display_name(target)
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             format_ban(name, reason),
             parse_mode="HTML",
         )
+        await schedule_delete(msg, context, 15)
         logger.info(
             "User %s banned by admin %s: %s",
             target.id,
@@ -595,10 +601,11 @@ async def unban_command(
         )
 
         name = _display_name(target)
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             format_unban(name),
             parse_mode="HTML",
         )
+        await schedule_delete(msg, context, 15)
         logger.info(
             "User %s unbanned by admin %s",
             target.id,
@@ -677,10 +684,11 @@ async def kick_command(
         )
 
         name = _display_name(target)
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             format_kick(name, reason),
             parse_mode="HTML",
         )
+        await schedule_delete(msg, context, 15)
         logger.info(
             "User %s kicked by admin %s: %s",
             target.id,
@@ -736,7 +744,8 @@ async def pin_command(
             },
         )
 
-        await update.message.reply_text("📌 Message pinned.")
+        msg = await update.message.reply_text("📌 Message pinned.")
+        await schedule_delete(msg, context, 15)
         logger.info(
             "Message pinned by admin %s", update.effective_user.id
         )
@@ -772,10 +781,11 @@ async def rules_command(
         await update.message.reply_text("⏳ Please slow down.")
         return
 
-    await update.message.reply_text(
+    msg = await update.message.reply_text(
         format_rules(),
         parse_mode="HTML",
     )
+    await schedule_delete(msg, context, 30)
 
 
 # ---------------------------------------------------------------------------

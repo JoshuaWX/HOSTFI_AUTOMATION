@@ -14,6 +14,7 @@ from telegram.ext import ContextTypes
 
 from bot.filters.scam_filter import run_scam_checks
 from bot.filters.spam_filter import run_spam_checks
+from bot.utils.auto_delete import schedule_delete
 from bot.utils.formatter import (
     format_flood_mute,
     format_rules,
@@ -428,9 +429,10 @@ async def group_message_filter(
                 until_date=until_date,
             )
             name = user.first_name or user.username or str(user.id)
-            await update.message.reply_text(
+            msg = await update.message.reply_text(
                 format_flood_mute(name), parse_mode="HTML"
             )
+            await schedule_delete(msg, context, 15)
             await log_action(
                 action="flood_mute",
                 admin_telegram_id=0,
@@ -611,4 +613,5 @@ async def help_command(
     """Handle /help — display available commands."""
     if not update.effective_message:
         return
-    await update.effective_message.reply_text(HELP_TEXT, parse_mode="HTML")
+    msg = await update.effective_message.reply_text(HELP_TEXT, parse_mode="HTML")
+    await schedule_delete(msg, context, 30)

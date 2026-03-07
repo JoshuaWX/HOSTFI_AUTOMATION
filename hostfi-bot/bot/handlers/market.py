@@ -12,9 +12,10 @@ import httpx
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes
 
+from bot.utils.auto_delete import schedule_delete
 from bot.utils.rate_limiter import check_rate_limit, get_redis
 from config import ADMIN_CHANNEL_ID
-from database.alerts import cancel_user_alerts, create_alert, get_user_alerts
+from database.alerts import cancel_user_alerts, create_alert, deactivate_alert, get_user_alerts
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +272,8 @@ async def price_command(
             f"<i>Data from CoinGecko • Updated live</i>"
         )
 
-        await update.effective_message.reply_text(msg, parse_mode="HTML")
+        msg = await update.effective_message.reply_text(msg, parse_mode="HTML")
+        await schedule_delete(msg, context, 45)
         logger.info("Price query: user=%s coin=%s", user_id, symbol)
 
     except httpx.HTTPStatusError as exc:
@@ -343,9 +345,10 @@ async def rates_command(
             "<i>Data from CoinGecko • Cached 60s</i>"
         )
 
-        await update.effective_message.reply_text(
+        msg = await update.effective_message.reply_text(
             "\n".join(lines), parse_mode="HTML"
         )
+        await schedule_delete(msg, context, 45)
         logger.info("Rates query: user=%s", user_id)
 
     except httpx.HTTPStatusError as exc:
@@ -430,9 +433,10 @@ async def market_command(
             "<i>Data from CoinGecko • Updated live</i>"
         )
 
-        await update.effective_message.reply_text(
+        msg = await update.effective_message.reply_text(
             "\n".join(lines), parse_mode="HTML"
         )
+        await schedule_delete(msg, context, 45)
         logger.info("Market query: user=%s", user_id)
 
     except httpx.HTTPStatusError as exc:
@@ -511,7 +515,8 @@ async def fear_command(
             f"⚠️ <i>This is not financial advice.</i>"
         )
 
-        await update.effective_message.reply_text(msg, parse_mode="HTML")
+        msg = await update.effective_message.reply_text(msg, parse_mode="HTML")
+        await schedule_delete(msg, context, 45)
         logger.info("Fear & Greed query: user=%s value=%s", user_id, value)
 
     except Exception as exc:
@@ -735,25 +740,116 @@ async def _alert_list(
 
     lines: list[str] = ["🔔 <b>Your Active Alerts</b>\n━━━━━━━━━━━━━━━━━━"]
 
-    for alert in alerts:
+    buttons: list[list[InlineKeyboardButton]] = []
+
+    for i, alert in enumerate(alerts, 1):
         coin_id = alert.get("coin_id", "")
         symbol = COIN_SYMBOLS.get(coin_id, coin_id.upper())
         target = alert.get("target_price", 0)
         direction = alert.get("direction", "above")
+        alert_id = alert.get("id")
         direction_emoji = "⬆️" if direction == "above" else "⬇️"
         lines.append(
-            f"\n🪙 <b>{symbol}</b> — ${_fmt_price(float(target))} "
+            f"\n{i}. 🪙 <b>{symbol}</b> — ${_fmt_price(float(target))} "
             f"{direction_emoji} {direction}"
         )
+        buttons.append([
+            InlineKeyboardButton(
+                f"❌ Cancel #{i} ({symbol})",
+                callback_data=f"alert_cancel_{alert_id}",
+            )
+        ])
 
-    lines.append(
-        "\n━━━━━━━━━━━━━━━━━━\n"
-        "Use <code>/alert cancel</code> to remove all alerts."
-    )
+    lines.append("\n━━━━━━━━━━━━━━━━━━")
 
     await update.effective_message.reply_text(
-        "\n".join(lines), parse_mode="HTML"
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(buttons) if buttons else None,
     )
+
+
+# ---------------------------------------------------------------------------
+# Alert cancel callback (inline button)
+# ---------------------------------------------------------------------------
+
+
+async def alert_cancel_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """
+    Handle inline [Cancel] button press for individual alerts.
+
+    Callback data format: alert_cancel_{alert_id}
+    """
+    query = update.callback_query
+    if not query or not query.data:
+        return
+
+    # Parse: alert_cancel_123
+    parts = query.data.split("_", 2)  # ["alert", "cancel", "123"]
+    if len(parts) != 3:
+        return
+
+    try:
+        alert_id = int(parts[2])
+    except ValueError:
+        await query.answer("Invalid alert.", show_alert=True)
+        return
+
+    success = await deactivate_alert(alert_id)
+
+    if not success:
+        await query.answer(
+            "❌ Could not cancel this alert.", show_alert=True
+        )
+        return
+
+    await query.answer("✅ Alert cancelled")
+
+    # Refresh the alert list in-place
+    user_id = query.from_user.id
+    alerts = await get_user_alerts(user_id)
+
+    if not alerts:
+        await query.edit_message_text(
+            "🔔 <b>Your Active Alerts</b>\n━━━━━━━━━━━━━━━━━━\n\n"
+            "ℹ️ No active alerts remaining.\n"
+            "Use <code>/alert set BTC 50000</code> to create one.",
+            parse_mode="HTML",
+        )
+        return
+
+    lines: list[str] = ["🔔 <b>Your Active Alerts</b>\n━━━━━━━━━━━━━━━━━━"]
+    new_buttons: list[list[InlineKeyboardButton]] = []
+
+    for i, alert in enumerate(alerts, 1):
+        coin_id = alert.get("coin_id", "")
+        symbol = COIN_SYMBOLS.get(coin_id, coin_id.upper())
+        target = alert.get("target_price", 0)
+        direction = alert.get("direction", "above")
+        a_id = alert.get("id")
+        direction_emoji = "⬆️" if direction == "above" else "⬇️"
+        lines.append(
+            f"\n{i}. 🪙 <b>{symbol}</b> — ${_fmt_price(float(target))} "
+            f"{direction_emoji} {direction}"
+        )
+        new_buttons.append([
+            InlineKeyboardButton(
+                f"❌ Cancel #{i} ({symbol})",
+                callback_data=f"alert_cancel_{a_id}",
+            )
+        ])
+
+    lines.append("\n━━━━━━━━━━━━━━━━━━")
+
+    await query.edit_message_text(
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup(new_buttons),
+    )
+
+    logger.info("Alert %s cancelled by user %s", alert_id, user_id)
 
 
 # ---------------------------------------------------------------------------

@@ -11,10 +11,12 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request, Response
-from telegram import Update
+from telegram import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, BotCommandScopeChat, Update
 
 from bot.application import build_application
 from config import (
+    ADMIN_CHANNEL_ID,
+    COMMUNITY_GROUP_ID,
     PORT,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_WEBHOOK_SECRET,
@@ -56,6 +58,94 @@ async def lifespan(app: FastAPI):
         allowed_updates=Update.ALL_TYPES,
     )
     logger.info("Webhook set: %s", webhook_url)
+
+    # ---- Scoped command menus ----
+    # Private chat commands (all users)
+    private_commands = [
+        BotCommand("start", "Start the bot"),
+        BotCommand("help", "Show available commands"),
+        BotCommand("rules", "View community rules"),
+        BotCommand("price", "Get crypto price"),
+        BotCommand("rates", "HOSTFI exchange rates"),
+        BotCommand("market", "Market overview"),
+        BotCommand("fear", "Fear & Greed Index"),
+        BotCommand("alert", "Manage price alerts"),
+        BotCommand("ask", "Ask the AI assistant"),
+        BotCommand("support", "Open a support ticket"),
+        BotCommand("rank", "View your XP rank"),
+        BotCommand("leaderboard", "Community leaderboard"),
+    ]
+    await _bot_app.bot.set_my_commands(
+        private_commands,
+        scope=BotCommandScopeAllPrivateChats(),
+    )
+
+    # Group chat commands (visible to everyone in the group)
+    group_commands = [
+        BotCommand("help", "Show available commands"),
+        BotCommand("rules", "View community rules"),
+        BotCommand("price", "Get crypto price"),
+        BotCommand("rates", "HOSTFI exchange rates"),
+        BotCommand("market", "Market overview"),
+        BotCommand("fear", "Fear & Greed Index"),
+        BotCommand("ask", "Ask the AI assistant"),
+    ]
+    await _bot_app.bot.set_my_commands(
+        group_commands,
+        scope=BotCommandScopeAllGroupChats(),
+    )
+
+    # Admin commands in the admin channel
+    if ADMIN_CHANNEL_ID:
+        admin_commands = [
+            BotCommand("tickets", "View open tickets"),
+            BotCommand("reply", "Reply to a ticket"),
+            BotCommand("close", "Close a ticket"),
+            BotCommand("stats", "Bot statistics"),
+            BotCommand("lookup", "Lookup a user"),
+            BotCommand("broadcast", "Send broadcast message"),
+            BotCommand("reindex", "Reindex knowledge base"),
+            BotCommand("adminhelp", "Admin command reference"),
+            BotCommand("warn", "Warn a user"),
+            BotCommand("mute", "Mute a user"),
+            BotCommand("unmute", "Unmute a user"),
+            BotCommand("ban", "Ban a user"),
+            BotCommand("unban", "Unban a user"),
+            BotCommand("kick", "Kick a user"),
+            BotCommand("pin", "Pin a message"),
+            BotCommand("announce", "Send announcement"),
+        ]
+        try:
+            await _bot_app.bot.set_my_commands(
+                admin_commands,
+                scope=BotCommandScopeChat(chat_id=ADMIN_CHANNEL_ID),
+            )
+        except Exception as exc:
+            logger.warning("Could not set admin channel commands: %s", exc)
+
+    # Admin commands in the community group (visible only to admins)
+    if COMMUNITY_GROUP_ID:
+        group_admin_commands = group_commands + [
+            BotCommand("warn", "Warn a user"),
+            BotCommand("mute", "Mute a user"),
+            BotCommand("unmute", "Unmute a user"),
+            BotCommand("ban", "Ban a user"),
+            BotCommand("unban", "Unban a user"),
+            BotCommand("kick", "Kick a user"),
+            BotCommand("pin", "Pin a message"),
+            BotCommand("announce", "Send announcement"),
+            BotCommand("stats", "Bot statistics"),
+        ]
+        try:
+            from telegram import BotCommandScopeChatAdministrators
+            await _bot_app.bot.set_my_commands(
+                group_admin_commands,
+                scope=BotCommandScopeChatAdministrators(chat_id=COMMUNITY_GROUP_ID),
+            )
+        except Exception as exc:
+            logger.warning("Could not set group admin commands: %s", exc)
+
+    logger.info("Scoped command menus registered")
 
     setup_scheduler(_bot_app)
 

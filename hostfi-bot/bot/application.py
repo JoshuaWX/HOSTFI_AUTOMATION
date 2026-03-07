@@ -217,7 +217,8 @@ def _register_callback_handlers(app: Application) -> None:
         rules_callback,
         verification_callback,
     )
-    from bot.handlers.tickets import rating_callback, ticket_claim_callback
+    from bot.handlers.market import alert_cancel_callback
+    from bot.handlers.tickets import rating_callback, ticket_cancel_callback, ticket_claim_callback
 
     # CAPTCHA verification buttons
     app.add_handler(
@@ -244,9 +245,19 @@ def _register_callback_handlers(app: Application) -> None:
         CallbackQueryHandler(ticket_claim_callback, pattern=r"^ticket_claim_")
     )
 
+    # Ticket cancel (user inline button)
+    app.add_handler(
+        CallbackQueryHandler(ticket_cancel_callback, pattern=r"^ticket_cancel_")
+    )
+
     # Ticket rating
     app.add_handler(
         CallbackQueryHandler(rating_callback, pattern=r"^rate_")
+    )
+
+    # Alert cancel (per-alert inline button)
+    app.add_handler(
+        CallbackQueryHandler(alert_cancel_callback, pattern=r"^alert_cancel_")
     )
 
     logger.info("Callback query handlers registered")

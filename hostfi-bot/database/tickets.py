@@ -188,6 +188,43 @@ async def resolve_ticket(ticket_id: str) -> dict[str, Any] | None:
         return None
 
 
+async def cancel_ticket(ticket_id: str, user_telegram_id: int) -> dict[str, Any] | None:
+    """
+    Cancel an open (unclaimed) ticket. Only the ticket owner can cancel.
+
+    Args:
+        ticket_id: Formatted ticket ID (e.g. "HSTF-0001")
+        user_telegram_id: Telegram ID of the user requesting cancellation
+
+    Returns:
+        The updated row dict, or None if not found / not cancellable
+    """
+
+    def _op() -> dict[str, Any] | None:
+        client = get_supabase_client()
+        ticket_number = int(ticket_id.split("-")[1])
+
+        result = (
+            client.table("tickets")
+            .update({"status": "cancelled"})
+            .eq("ticket_number", ticket_number)
+            .eq("user_telegram_id", user_telegram_id)
+            .eq("status", "open")
+            .execute()
+        )
+        if result.data:
+            row = result.data[0]
+            row["ticket_id"] = _format_ticket_id(row["ticket_number"])
+            return row
+        return None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to cancel ticket %s: %s", ticket_id, exc)
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Rate
 # ---------------------------------------------------------------------------

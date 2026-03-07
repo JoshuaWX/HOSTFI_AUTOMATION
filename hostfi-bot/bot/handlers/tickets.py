@@ -8,7 +8,7 @@ import html
 import logging
 from datetime import datetime, timezone
 
-from telegram import Update
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from bot.utils.keyboards import rating_keyboard, ticket_keyboard
@@ -17,6 +17,7 @@ from bot.utils.rate_limiter import check_rate_limit
 from config import ADMIN_CHANNEL_ID
 from database.logs import log_action
 from database.tickets import (
+    cancel_ticket,
     claim_ticket,
     create_ticket,
     get_all_active_tickets,
@@ -161,6 +162,12 @@ async def ticket_receive_description(
             "to you shortly. You'll receive a message when an agent "
             "claims your ticket.",
             parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "❌ Cancel Ticket",
+                    callback_data=f"ticket_cancel_{ticket_id}",
+                )]
+            ]),
         )
 
         # Post to admin channel with claim button
@@ -227,6 +234,60 @@ async def ticket_cancel(
             "❌ Ticket creation cancelled."
         )
     return ConversationHandler.END
+
+
+# ---------------------------------------------------------------------------
+# Inline ticket cancel callback
+# ---------------------------------------------------------------------------
+
+
+async def ticket_cancel_callback(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
+    """
+    Handle the inline [Cancel Ticket] button press from the user.
+
+    Only cancels open (unclaimed) tickets owned by the pressing user.
+    Callback data format: ticket_cancel_HSTF-0001
+    """
+    query = update.callback_query
+    if not query or not query.data:
+        return
+
+    # Parse ticket_id: ticket_cancel_HSTF-0001
+    parts = query.data.split("_", 2)  # ["ticket", "cancel", "HSTF-0001"]
+    if len(parts) != 3:
+        return
+
+    ticket_id = parts[2]
+    user_id = query.from_user.id
+
+    ticket = await cancel_ticket(ticket_id, user_id)
+
+    if ticket is None:
+        await query.answer(
+            "❌ Cannot cancel — ticket not found, already claimed, or not yours.",
+            show_alert=True,
+        )
+        return
+
+    await query.answer(f"✅ Ticket {ticket_id} cancelled")
+
+    # Update the user's message to reflect cancellation
+    await query.edit_message_text(
+        f"🎫 <b>Ticket {ticket_id}</b> — <i>Cancelled</i>\n\n"
+        "You can open a new ticket anytime with /support.",
+        parse_mode="HTML",
+    )
+
+    await log_action(
+        action="ticket_cancelled",
+        admin_telegram_id=0,
+        target_telegram_id=user_id,
+        metadata={"ticket_id": ticket_id},
+    )
+
+    logger.info("Ticket %s cancelled by user %s", ticket_id, user_id)
 
 
 # ---------------------------------------------------------------------------
