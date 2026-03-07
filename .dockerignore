@@ -1,0 +1,14 @@
+.git
+.gitignore
+.venv
+.vscode
+__pycache__
+*.pyc
+*.pyo
+*.md
+*.pdf
+hostfi-bot/.venv
+hostfi-bot/.env
+hostfi-bot/chroma_db
+hostfi-bot/.pytest_cache
+rag_train.txt
