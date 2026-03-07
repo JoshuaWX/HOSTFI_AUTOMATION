@@ -11,7 +11,7 @@ from contextlib import asynccontextmanager
 
 import uvicorn
 from fastapi import FastAPI, Request, Response
-from telegram import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, BotCommandScopeChat, Update
+from telegram import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAllPrivateChats, BotCommandScopeChat, BotCommandScopeChatAdministrators, Update
 
 from bot.application import build_application
 from config import (
@@ -50,6 +50,7 @@ async def lifespan(app: FastAPI):
 
     _bot_app = build_application()
     await _bot_app.initialize()
+    await _bot_app.start()
 
     webhook_url = f"{WEBHOOK_URL}/webhook"
     await _bot_app.bot.set_webhook(
@@ -137,13 +138,18 @@ async def lifespan(app: FastAPI):
             BotCommand("stats", "Bot statistics"),
         ]
         try:
-            from telegram import BotCommandScopeChatAdministrators
+            logger.info(
+                "Registering admin commands for group %s with %d commands",
+                COMMUNITY_GROUP_ID,
+                len(group_admin_commands),
+            )
             await _bot_app.bot.set_my_commands(
                 group_admin_commands,
                 scope=BotCommandScopeChatAdministrators(chat_id=COMMUNITY_GROUP_ID),
             )
+            logger.info("Group admin commands registered successfully")
         except Exception as exc:
-            logger.warning("Could not set group admin commands: %s", exc)
+            logger.error("Could not set group admin commands for chat %s: %s", COMMUNITY_GROUP_ID, exc)
 
     logger.info("Scoped command menus registered")
 
@@ -178,6 +184,12 @@ async def lifespan(app: FastAPI):
             logger.info("Webhook deleted")
         except Exception as exc:
             logger.error("Error deleting webhook: %s", exc)
+
+        try:
+            await _bot_app.stop()
+            logger.info("Bot application stopped")
+        except Exception as exc:
+            logger.error("Error stopping bot: %s", exc)
 
         try:
             await _bot_app.shutdown()
