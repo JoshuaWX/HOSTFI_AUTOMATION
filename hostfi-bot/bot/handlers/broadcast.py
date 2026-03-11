@@ -276,6 +276,13 @@ async def broadcast_command(
         if not update.effective_user or not update.effective_message:
             return ConversationHandler.END
 
+        from config import ADMIN_CHANNEL_ID as _ADMIN_CH
+        if update.effective_chat and update.effective_chat.id != _ADMIN_CH:
+            await update.effective_message.reply_text(
+                "⛔ This command can only be used in the admin channel."
+            )
+            return ConversationHandler.END
+
         if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
                 "⛔ This command is for admins only."

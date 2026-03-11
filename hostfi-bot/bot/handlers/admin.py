@@ -42,6 +42,12 @@ async def stats_command(
         if not update.effective_user or not update.effective_message:
             return
 
+        if update.effective_chat and update.effective_chat.id != ADMIN_CHANNEL_ID:
+            await update.effective_message.reply_text(
+                "⛔ This command can only be used in the admin channel."
+            )
+            return
+
         if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
                 "⛔ This command is for admins only."

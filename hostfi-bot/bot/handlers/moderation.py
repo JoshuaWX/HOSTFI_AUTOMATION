@@ -808,6 +808,13 @@ async def announce_command(
         update: Incoming Telegram update
         context: Bot context
     """
+    from config import ADMIN_CHANNEL_ID as _ADMIN_CH
+    if update.effective_chat and update.effective_chat.id != _ADMIN_CH:
+        await update.message.reply_text(
+            "⛔ This command can only be used in the admin channel."
+        )
+        return
+
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
             "⛔ You don't have permission to use this command."

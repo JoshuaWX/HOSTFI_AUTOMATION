@@ -7,16 +7,18 @@ Author: HOSTFI Bot Team
 
 import logging
 
+from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
     CommandHandler,
     ConversationHandler,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET
+from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_ID, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET
 
 logger = logging.getLogger(__name__)
 
@@ -40,6 +42,7 @@ def build_application() -> Application:
         .build()
     )
 
+    _register_group_guard(app)
     _register_conversation_handlers(app)
     _register_command_handlers(app)
     _register_callback_handlers(app)
@@ -47,6 +50,37 @@ def build_application() -> Application:
 
     logger.info("Application built with all handlers registered")
     return app
+
+
+# ---------------------------------------------------------------------------
+# Group guard — block unauthorised groups
+# ---------------------------------------------------------------------------
+
+
+def _register_group_guard(app: Application) -> None:
+    """Block the bot from operating in unauthorised groups."""
+
+    async def _guard(update: Update, context):
+        chat = update.effective_chat
+        if chat is None:
+            return
+        if chat.type in ("group", "supergroup"):
+            allowed = {COMMUNITY_GROUP_ID, ADMIN_CHANNEL_ID} - {0}
+            if chat.id not in allowed:
+                logger.warning(
+                    "Unauthorised group %s (%s) — leaving",
+                    chat.id,
+                    chat.title,
+                )
+                try:
+                    await context.bot.leave_chat(chat.id)
+                except Exception as exc:
+                    logger.error("Failed to leave chat %s: %s", chat.id, exc)
+                from telegram.ext import ApplicationHandlerStop
+                raise ApplicationHandlerStop
+
+    app.add_handler(TypeHandler(Update, _guard), group=-1)
+    logger.info("Group guard registered — only authorised groups allowed")
 
 
 # ---------------------------------------------------------------------------
