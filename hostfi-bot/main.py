@@ -63,14 +63,8 @@ async def lifespan(app: FastAPI):
     # ---- Scoped command menus ----
     # Private chat commands (all users)
     private_commands = [
-        BotCommand("start", "Start the bot"),
         BotCommand("help", "Show available commands"),
         BotCommand("rules", "View community rules"),
-        BotCommand("price", "Get crypto price"),
-        BotCommand("rates", "HOSTFI exchange rates"),
-        BotCommand("market", "Market overview"),
-        BotCommand("fear", "Fear & Greed Index"),
-        BotCommand("alert", "Manage price alerts"),
         BotCommand("ask", "Ask the AI assistant"),
         BotCommand("support", "Open a support ticket"),
         BotCommand("rank", "View your XP rank"),
@@ -85,10 +79,6 @@ async def lifespan(app: FastAPI):
     group_commands = [
         BotCommand("help", "Show available commands"),
         BotCommand("rules", "View community rules"),
-        BotCommand("price", "Get crypto price"),
-        BotCommand("rates", "HOSTFI exchange rates"),
-        BotCommand("market", "Market overview"),
-        BotCommand("fear", "Fear & Greed Index"),
         BotCommand("ask", "Ask the AI assistant"),
     ]
     await _bot_app.bot.set_my_commands(
@@ -134,8 +124,6 @@ async def lifespan(app: FastAPI):
             BotCommand("unban", "Unban a user"),
             BotCommand("kick", "Kick a user"),
             BotCommand("pin", "Pin a message"),
-            BotCommand("announce", "Send announcement"),
-            BotCommand("stats", "Bot statistics"),
         ]
         try:
             logger.info(

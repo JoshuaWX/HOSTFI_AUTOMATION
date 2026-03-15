@@ -60,17 +60,38 @@ def build_application() -> Application:
 def _register_group_guard(app: Application) -> None:
     """Block the bot from operating in unauthorised groups."""
 
+    def _id_variants(chat_id: int) -> set[int]:
+        """Return safe variants for Telegram chat IDs (legacy vs -100 style)."""
+        variants = {chat_id}
+        if chat_id == 0:
+            return variants
+
+        abs_str = str(abs(chat_id))
+        # If user stored legacy negative form, accept modern -100-prefixed form too.
+        if chat_id < 0 and not abs_str.startswith("100"):
+            variants.add(int(f"-100{abs_str}"))
+
+        # If user stored -100-prefixed form, accept legacy negative form too.
+        if chat_id < 0 and abs_str.startswith("100") and len(abs_str) > 3:
+            variants.add(-int(abs_str[3:]))
+
+        return variants
+
     async def _guard(update: Update, context):
         chat = update.effective_chat
         if chat is None:
             return
         if chat.type in ("group", "supergroup"):
-            allowed = {COMMUNITY_GROUP_ID, ADMIN_CHANNEL_ID} - {0}
+            allowed: set[int] = set()
+            for cid in (COMMUNITY_GROUP_ID, ADMIN_CHANNEL_ID):
+                allowed.update(_id_variants(cid))
+            allowed.discard(0)
             if chat.id not in allowed:
                 logger.warning(
-                    "Unauthorised group %s (%s) — leaving",
+                    "Unauthorised group %s (%s) — leaving. Allowed IDs: %s",
                     chat.id,
                     chat.title,
+                    sorted(allowed),
                 )
                 try:
                     await context.bot.leave_chat(chat.id)
@@ -78,6 +99,7 @@ def _register_group_guard(app: Application) -> None:
                     logger.error("Failed to leave chat %s: %s", chat.id, exc)
                 from telegram.ext import ApplicationHandlerStop
                 raise ApplicationHandlerStop
+            logger.info("Authorised group detected: %s (%s)", chat.id, chat.title)
 
     app.add_handler(TypeHandler(Update, _guard), group=-1)
     logger.info("Group guard registered — only authorised groups allowed")
@@ -190,20 +212,7 @@ def _register_command_handlers(app: Application) -> None:
 
     app.add_handler(CommandHandler("ask", ask_command))
 
-    # M3: Market data
-    from bot.handlers.market import (
-        alert_command,
-        fear_command,
-        market_command,
-        price_command,
-        rates_command,
-    )
-
-    app.add_handler(CommandHandler("price", price_command))
-    app.add_handler(CommandHandler("rates", rates_command))
-    app.add_handler(CommandHandler("market", market_command))
-    app.add_handler(CommandHandler("fear", fear_command))
-    app.add_handler(CommandHandler("alert", alert_command))
+    # M3: Market commands intentionally hidden/disabled
 
     # M4: Broadcast & engagement
     app.add_handler(CommandHandler("poll", poll_command))
