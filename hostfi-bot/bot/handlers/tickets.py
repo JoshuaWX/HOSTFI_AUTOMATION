@@ -11,8 +11,9 @@ from datetime import datetime, timezone
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
 
+from bot.utils.auto_delete import schedule_error_delete
 from bot.utils.keyboards import rating_keyboard, ticket_keyboard
-from bot.utils.permissions import is_admin
+from bot.utils.permissions import is_admin, is_admin_channel_chat
 from bot.utils.rate_limiter import check_rate_limit
 from config import ADMIN_CHANNEL_ID
 from database.logs import log_action
@@ -29,6 +30,19 @@ from database.tickets import (
 from database.users import add_xp
 
 logger = logging.getLogger(__name__)
+
+
+async def _reply_error(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    parse_mode: str | None = None,
+) -> None:
+    """Send an error/denial message and auto-delete it in group chats."""
+    if not update.effective_message:
+        return
+    msg = await update.effective_message.reply_text(text, parse_mode=parse_mode)
+    await schedule_error_delete(msg, context, 5)
 
 
 # ---------------------------------------------------------------------------
@@ -63,12 +77,18 @@ async def support_command(
         if not update.effective_user or not update.effective_message:
             return ConversationHandler.END
 
+        if update.effective_chat and update.effective_chat.type != "private":
+            await _reply_error(
+                update,
+                context,
+                "⛔ /support is available in DM only. Please message the bot privately.",
+            )
+            return ConversationHandler.END
+
         user_id = update.effective_user.id
 
         if not await check_rate_limit(user_id, "command", limit=10, window=60):
-            await update.effective_message.reply_text(
-                "⏳ Too many requests. Please wait a moment."
-            )
+            await _reply_error(update, context, "⏳ Too many requests. Please wait a moment.")
             return ConversationHandler.END
 
         # Check for existing active ticket
@@ -76,7 +96,9 @@ async def support_command(
         if active:
             ticket_id = active["ticket_id"]
             status = active["status"]
-            await update.effective_message.reply_text(
+            await _reply_error(
+                update,
+                context,
                 f"🎫 You already have an active ticket: <b>{ticket_id}</b>\n"
                 f"Status: <b>{status.capitalize()}</b>\n\n"
                 "Please wait for your current ticket to be resolved "
@@ -128,14 +150,14 @@ async def ticket_receive_description(
         description = (update.effective_message.text or "").strip()
 
         if not description:
-            await update.effective_message.reply_text(
-                "❌ Please send a text description of your issue."
-            )
+            await _reply_error(update, context, "❌ Please send a text description of your issue.")
             return TICKET_DESCRIPTION
 
         if len(description) > 2000:
-            await update.effective_message.reply_text(
-                "❌ Description too long. Please keep it under 2000 characters."
+            await _reply_error(
+                update,
+                context,
+                "❌ Description too long. Please keep it under 2000 characters.",
             )
             return TICKET_DESCRIPTION
 
@@ -143,9 +165,11 @@ async def ticket_receive_description(
         ticket = await create_ticket(user.id, description)
 
         if ticket is None:
-            await update.effective_message.reply_text(
+            await _reply_error(
+                update,
+                context,
                 "❌ You already have an open ticket. "
-                "Please wait for it to be resolved first."
+                "Please wait for it to be resolved first.",
             )
             return ConversationHandler.END
 
@@ -205,8 +229,10 @@ async def ticket_receive_description(
     except Exception as exc:
         logger.error("Error in ticket_receive_description: %s", exc)
         if update.effective_message:
-            await update.effective_message.reply_text(
-                "⚠️ Something went wrong. Please try /support again."
+            await _reply_error(
+                update,
+                context,
+                "⚠️ Something went wrong. Please try /support again.",
             )
         return ConversationHandler.END
 
@@ -394,17 +420,25 @@ async def reply_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not await is_admin(update.effective_user.id, bot=context.bot):
-            await update.effective_message.reply_text(
-                "⛔ This command is for admins only."
+        if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
+            await _reply_error(
+                update,
+                context,
+                "⛔ This command can only be used in the admin group.",
             )
+            return
+
+        if not await is_admin(update.effective_user.id, bot=context.bot):
+            await _reply_error(update, context, "⛔ This command is for admins only.")
             return
 
         text = update.effective_message.text or ""
         parts = text.split(None, 2)  # ["/reply", "HSTF-0001", "message..."]
 
         if len(parts) < 3:
-            await update.effective_message.reply_text(
+            await _reply_error(
+                update,
+                context,
                 "ℹ️ <b>Usage:</b>\n"
                 "<code>/reply HSTF-0001 Your message here</code>",
                 parse_mode="HTML",
@@ -417,15 +451,19 @@ async def reply_command(
         # Validate ticket exists and is claimed
         ticket = await get_ticket_by_id(ticket_id)
         if not ticket:
-            await update.effective_message.reply_text(
+            await _reply_error(
+                update,
+                context,
                 f"❌ Ticket <b>{html.escape(ticket_id)}</b> not found.",
                 parse_mode="HTML",
             )
             return
 
         if ticket["status"] not in ("claimed", "open"):
-            await update.effective_message.reply_text(
-                f"❌ Ticket <b>{ticket_id}</b> is already {ticket['status']}."
+            await _reply_error(
+                update,
+                context,
+                f"❌ Ticket <b>{ticket_id}</b> is already {ticket['status']}.",
             )
             return
 
@@ -448,9 +486,7 @@ async def reply_command(
                 parse_mode="HTML",
             )
         except Exception as send_exc:
-            await update.effective_message.reply_text(
-                f"⚠️ Could not send message to user: {send_exc}"
-            )
+            await _reply_error(update, context, f"⚠️ Could not send message to user: {send_exc}")
             return
 
         await update.effective_message.reply_text(
@@ -493,17 +529,25 @@ async def close_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not await is_admin(update.effective_user.id, bot=context.bot):
-            await update.effective_message.reply_text(
-                "⛔ This command is for admins only."
+        if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
+            await _reply_error(
+                update,
+                context,
+                "⛔ This command can only be used in the admin group.",
             )
+            return
+
+        if not await is_admin(update.effective_user.id, bot=context.bot):
+            await _reply_error(update, context, "⛔ This command is for admins only.")
             return
 
         text = update.effective_message.text or ""
         parts = text.split()
 
         if len(parts) < 2:
-            await update.effective_message.reply_text(
+            await _reply_error(
+                update,
+                context,
                 "ℹ️ <b>Usage:</b>\n"
                 "<code>/close HSTF-0001</code>",
                 parse_mode="HTML",
@@ -514,7 +558,9 @@ async def close_command(
 
         ticket = await resolve_ticket(ticket_id)
         if not ticket:
-            await update.effective_message.reply_text(
+            await _reply_error(
+                update,
+                context,
                 f"❌ Ticket <b>{html.escape(ticket_id)}</b> not found "
                 "or not in claimed status.",
                 parse_mode="HTML",
@@ -698,18 +744,22 @@ async def tickets_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not await is_admin(update.effective_user.id, bot=context.bot):
-            await update.effective_message.reply_text(
-                "⛔ This command is for admins only."
+        if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
+            await _reply_error(
+                update,
+                context,
+                "⛔ This command can only be used in the admin group.",
             )
+            return
+
+        if not await is_admin(update.effective_user.id, bot=context.bot):
+            await _reply_error(update, context, "⛔ This command is for admins only.")
             return
 
         tickets = await get_all_active_tickets()
 
         if not tickets:
-            await update.effective_message.reply_text(
-                "📭 No active tickets at the moment."
-            )
+            await _reply_error(update, context, "📭 No active tickets at the moment.")
             return
 
         status_emoji = {"open": "🟡", "claimed": "🟢"}
@@ -742,9 +792,7 @@ async def tickets_command(
 
     except Exception as exc:
         logger.error("Error in tickets_command: %s", exc)
-        await update.effective_message.reply_text(
-            "⚠️ Something went wrong. Please try again."
-        )
+        await _reply_error(update, context, "⚠️ Something went wrong. Please try again.")
 
 
 # ---------------------------------------------------------------------------

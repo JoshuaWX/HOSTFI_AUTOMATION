@@ -76,6 +76,23 @@ async def is_superadmin(user_id: int) -> bool:
     return user_id == SUPERADMIN_ID
 
 
+def is_admin_channel_chat(chat_id: int | None) -> bool:
+    """Return True if chat_id matches ADMIN_CHANNEL_ID (supports legacy/-100 forms)."""
+    if not chat_id or not ADMIN_CHANNEL_ID:
+        return False
+
+    allowed = {ADMIN_CHANNEL_ID}
+    abs_str = str(abs(ADMIN_CHANNEL_ID))
+
+    if ADMIN_CHANNEL_ID < 0 and not abs_str.startswith("100"):
+        allowed.add(int(f"-100{abs_str}"))
+
+    if ADMIN_CHANNEL_ID < 0 and abs_str.startswith("100") and len(abs_str) > 3:
+        allowed.add(-int(abs_str[3:]))
+
+    return chat_id in allowed
+
+
 def clear_admin_cache() -> None:
     """Clear the admin cache (call when admin list might have changed)."""
     _admin_cache.clear()

@@ -49,3 +49,27 @@ async def schedule_delete(
         data={"chat_id": message.chat_id, "message_id": message.message_id},
         name=f"auto_delete_{message.message_id}",
     )
+
+
+async def schedule_error_delete(
+    message: Message,
+    context: ContextTypes.DEFAULT_TYPE,
+    delay: int = 5,
+) -> None:
+    """
+    Schedule error/denial messages for quick cleanup in group chats only.
+
+    Args:
+        message: The sent Message object to delete later
+        context: Bot context (must have job_queue)
+        delay: Seconds before deletion (default 5)
+    """
+    if message.chat.type not in ("group", "supergroup"):
+        return
+
+    context.job_queue.run_once(
+        _delete_message_job,
+        when=delay,
+        data={"chat_id": message.chat_id, "message_id": message.message_id},
+        name=f"error_delete_{message.message_id}",
+    )

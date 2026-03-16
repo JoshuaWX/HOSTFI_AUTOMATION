@@ -12,12 +12,26 @@ from datetime import datetime, timedelta, timezone
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.utils.auto_delete import schedule_error_delete
 from bot.utils.permissions import is_admin, is_superadmin
-from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_ID
+from bot.utils.permissions import is_admin_channel_chat
 from database.client import get_supabase_client
 from database.logs import log_action
 
 logger = logging.getLogger(__name__)
+
+
+async def _reply_error(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    parse_mode: str | None = None,
+) -> None:
+    """Send an error/denial message and auto-delete it in group chats."""
+    if not update.effective_message:
+        return
+    msg = await update.effective_message.reply_text(text, parse_mode=parse_mode)
+    await schedule_error_delete(msg, context, 5)
 
 
 # ---------------------------------------------------------------------------
@@ -42,16 +56,16 @@ async def stats_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if update.effective_chat and update.effective_chat.id != ADMIN_CHANNEL_ID:
-            await update.effective_message.reply_text(
-                "⛔ This command can only be used in the admin channel."
+        if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
+            await _reply_error(
+                update,
+                context,
+                "⛔ This command can only be used in the admin group.",
             )
             return
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
-            await update.effective_message.reply_text(
-                "⛔ This command is for admins only."
-            )
+            await _reply_error(update, context, "⛔ This command is for admins only.")
             return
 
         await update.effective_message.reply_text("📊 Loading stats...")
@@ -83,9 +97,7 @@ async def stats_command(
 
     except Exception as exc:
         logger.error("Error in stats_command: %s", exc)
-        await update.effective_message.reply_text(
-            "⚠️ Failed to load stats. Please try again."
-        )
+        await _reply_error(update, context, "⚠️ Failed to load stats. Please try again.")
 
 
 async def _gather_stats() -> dict:
@@ -222,17 +234,25 @@ async def lookup_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not await is_admin(update.effective_user.id, bot=context.bot):
-            await update.effective_message.reply_text(
-                "⛔ This command is for admins only."
+        if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
+            await _reply_error(
+                update,
+                context,
+                "⛔ This command can only be used in the admin group.",
             )
+            return
+
+        if not await is_admin(update.effective_user.id, bot=context.bot):
+            await _reply_error(update, context, "⛔ This command is for admins only.")
             return
 
         text = update.effective_message.text or ""
         parts = text.split()
 
         if len(parts) < 2:
-            await update.effective_message.reply_text(
+            await _reply_error(
+                update,
+                context,
                 "ℹ️ <b>Usage:</b>\n<code>/lookup 123456789</code>",
                 parse_mode="HTML",
             )
@@ -241,15 +261,15 @@ async def lookup_command(
         try:
             target_id = int(parts[1])
         except ValueError:
-            await update.effective_message.reply_text(
-                "❌ Invalid Telegram ID. Must be a number."
-            )
+            await _reply_error(update, context, "❌ Invalid Telegram ID. Must be a number.")
             return
 
         user_data = await _lookup_user(target_id)
 
         if not user_data:
-            await update.effective_message.reply_text(
+            await _reply_error(
+                update,
+                context,
                 f"❌ User <code>{target_id}</code> not found in database.",
                 parse_mode="HTML",
             )
@@ -287,9 +307,7 @@ async def lookup_command(
 
     except Exception as exc:
         logger.error("Error in lookup_command: %s", exc)
-        await update.effective_message.reply_text(
-            "⚠️ Something went wrong. Please try again."
-        )
+        await _reply_error(update, context, "⚠️ Something went wrong. Please try again.")
 
 
 async def _lookup_user(telegram_id: int) -> dict | None:
@@ -358,10 +376,16 @@ async def reindex_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not await is_superadmin(update.effective_user.id):
-            await update.effective_message.reply_text(
-                "⛔ This command is for the superadmin only."
+        if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
+            await _reply_error(
+                update,
+                context,
+                "⛔ This command can only be used in the admin group.",
             )
+            return
+
+        if not await is_superadmin(update.effective_user.id):
+            await _reply_error(update, context, "⛔ This command is for the superadmin only.")
             return
 
         status_msg = await update.effective_message.reply_text(
@@ -395,9 +419,7 @@ async def reindex_command(
 
     except Exception as exc:
         logger.error("Error in reindex_command: %s", exc)
-        await update.effective_message.reply_text(
-            f"⚠️ Re-indexing failed: {html.escape(str(exc))}"
-        )
+        await _reply_error(update, context, f"⚠️ Re-indexing failed: {html.escape(str(exc))}")
 
 
 # ---------------------------------------------------------------------------
@@ -419,10 +441,16 @@ async def adminhelp_command(
         if not update.effective_user or not update.effective_message:
             return
 
-        if not await is_admin(update.effective_user.id, bot=context.bot):
-            await update.effective_message.reply_text(
-                "⛔ This command is for admins only."
+        if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
+            await _reply_error(
+                update,
+                context,
+                "⛔ This command can only be used in the admin group.",
             )
+            return
+
+        if not await is_admin(update.effective_user.id, bot=context.bot):
+            await _reply_error(update, context, "⛔ This command is for admins only.")
             return
 
         help_text = (
