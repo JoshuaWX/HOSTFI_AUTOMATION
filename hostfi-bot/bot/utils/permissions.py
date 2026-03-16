@@ -12,7 +12,7 @@ import logging
 
 from telegram import Bot
 
-from config import ADMIN_IDS, COMMUNITY_GROUP_ID, SUPERADMIN_ID
+from config import ADMIN_CHANNEL_ID, ADMIN_IDS, COMMUNITY_GROUP_ID, SUPERADMIN_ID
 
 logger = logging.getLogger(__name__)
 
