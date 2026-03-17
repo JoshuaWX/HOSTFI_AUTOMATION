@@ -66,6 +66,9 @@ A: Ensure the bank account is verified and in your name. Withdrawals are only al
 Q: Does HostFi charge withdrawal fees?
 A: HostFi does not charge fees for deposits or swaps. Fees apply only to fiat and cryptocurrency withdrawals. Standard withdrawal fees apply — check current rates in the app.
 
+Q: What is the Minimum and Maximum Fiat(in Naira) that I can withdraw and how much is the withdrawal fee?
+A: For fiat in Naira you can withdraw a minimun of 1000 naira and maximum of 2,500,000(2.5 million) and the fee remains 100 naira 
+
 Q: Can I withdraw crypto to an external wallet?
 A: Yes. Go to the crypto asset, tap "Send" or "Withdraw", enter the destination wallet address, review the network fee, and confirm. Double-check the address as crypto transactions are irreversible.
 
