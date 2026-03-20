@@ -260,7 +260,7 @@ def _register_callback_handlers(app: Application) -> None:
         rules_callback,
         verification_callback,
     )
-    from bot.handlers.market import alert_cancel_callback
+    # from bot.handlers.market import alert_cancel_callback
     from bot.handlers.tickets import rating_callback, ticket_cancel_callback, ticket_claim_callback
 
     # CAPTCHA verification buttons
@@ -299,9 +299,9 @@ def _register_callback_handlers(app: Application) -> None:
     )
 
     # Alert cancel (per-alert inline button)
-    app.add_handler(
-        CallbackQueryHandler(alert_cancel_callback, pattern=r"^alert_cancel_")
-    )
+    # app.add_handler(
+    #     CallbackQueryHandler(alert_cancel_callback, pattern=r"^alert_cancel_")
+    # )
 
     logger.info("Callback query handlers registered")
 
