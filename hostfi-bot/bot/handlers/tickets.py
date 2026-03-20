@@ -199,7 +199,7 @@ async def ticket_receive_description(
             f"🎫 <b>New Support Ticket</b>\n"
             f"━━━━━━━━━━━━━━━━━━\n\n"
             f"🆔 <b>Ticket:</b> {ticket_id}\n"
-            f"👤 <b>User:</b> {safe_name} (<code>{user.id}</code>)\n"
+            f"👤 <b>User:</b> <a href='tg://user?id={user.id}'>{safe_name}</a> (<code>{user.id}</code>)\n"
             f"📝 <b>Issue:</b>\n{safe_desc}\n\n"
             f"🕐 <b>Created:</b> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
         )
@@ -361,14 +361,15 @@ async def ticket_claim_callback(
 
     await query.answer(f"✅ You claimed {ticket_id}")
 
-    # Update the admin channel message
+    # Update the admin channel message with claimed status and remove claim button
     await query.edit_message_text(
         query.message.text_html
-        + f"\n\n✅ <b>Claimed by:</b> {admin_name}",
+        + f"\n\n✅ <b>Claimed by:</b> <a href='tg://user?id={admin_id}'>{admin_name}</a>",
         parse_mode="HTML",
+        reply_markup=None,
     )
 
-    # Notify the user
+    # Notify the user with clickable admin link
     user_telegram_id = ticket.get("user_telegram_id")
     try:
         await context.bot.send_message(
@@ -377,7 +378,7 @@ async def ticket_claim_callback(
                 f"🎫 <b>Ticket Update — {ticket_id}</b>\n\n"
                 f"An agent has picked up your ticket. "
                 "They'll contact you shortly.\n\n"
-                f"🧑‍💼 <b>Agent:</b> {admin_name}\n\n"
+                f"🧑‍💼 <b>Agent:</b> <a href='tg://user?id={admin_id}'>{admin_name}</a>\n\n"
                 "<i>Please be patient while we review your issue.</i>"
             ),
             parse_mode="HTML",
@@ -473,14 +474,15 @@ async def reply_command(
         )
         safe_message = html.escape(message)
 
-        # Send message to the user
+        # Send message to the user with clickable admin link
+        admin_id = update.effective_user.id
         try:
             await context.bot.send_message(
                 chat_id=user_telegram_id,
                 text=(
                     f"💬 <b>Support Reply — {ticket_id}</b>\n"
                     f"━━━━━━━━━━━━━━━━━━\n\n"
-                    f"🧑‍💼 <b>{admin_name}:</b>\n"
+                    f"🧑‍💼 <b><a href='tg://user?id={admin_id}'>{admin_name}</a>:</b>\n"
                     f"{safe_message}"
                 ),
                 parse_mode="HTML",

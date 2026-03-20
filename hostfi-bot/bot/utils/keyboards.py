@@ -106,16 +106,21 @@ def verification_keyboard(
 # ---------------------------------------------------------------------------
 
 
-def ticket_keyboard(ticket_id: str) -> InlineKeyboardMarkup:
+def ticket_keyboard(ticket_id: str, claimed: bool = False) -> InlineKeyboardMarkup:
     """
     Build the admin ticket-claim keyboard.
 
     Args:
         ticket_id: Formatted ticket ID (e.g. "HSTF-0001")
+        claimed: If True, shows claimed status without action buttons; if False, shows claim button
 
     Returns:
-        InlineKeyboardMarkup with a Claim Ticket button
+        InlineKeyboardMarkup with claim button or empty if claimed
     """
+    if claimed:
+        # No buttons for claimed tickets (message will be edited to remove buttons)
+        return InlineKeyboardMarkup([])
+    
     buttons = [
         [
             InlineKeyboardButton(
