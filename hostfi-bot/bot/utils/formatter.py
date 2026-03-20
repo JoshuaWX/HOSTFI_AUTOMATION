@@ -36,7 +36,6 @@ def format_welcome(name: str) -> str:
         "• 🏦 Deposit &amp; withdraw NGN\n\n"
         "<b>Quick Commands:</b>\n"
         "/help — See all commands\n"
-        "/price BTC — Check live crypto prices\n"
         "/support — Get help from our team"
     )
 

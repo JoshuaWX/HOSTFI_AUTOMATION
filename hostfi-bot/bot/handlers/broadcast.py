@@ -102,8 +102,6 @@ async def start_command(
             "🎉 <b>Welcome to the HOSTFI Bot!</b>\n\n"
             "I'm your all-in-one crypto community assistant.\n\n"
             "<b>What I can do:</b>\n"
-            "• 💰 /price — Live crypto prices\n"
-            "• 📊 /market — Market overview\n"
             "• 🤖 /ask — AI-powered support\n"
             "• 🎫 /support — Open a support ticket\n"
             "• 🏆 /rank — Check your XP rank\n"
