@@ -62,25 +62,25 @@ def setup_scheduler(application: Application) -> AsyncIOScheduler:
     """
     scheduler = get_scheduler()
 
-    # Daily digest at 9:00 AM WAT
-    scheduler.add_job(
-        daily_digest_job,
-        trigger=CronTrigger(hour=9, minute=0, timezone=WAT),
-        args=[application],
-        id="daily_digest",
-        name="Daily Market Digest",
-        replace_existing=True,
-    )
+    # # Daily digest at 9:00 AM WAT
+    # scheduler.add_job(
+    #     daily_digest_job,
+    #     trigger=CronTrigger(hour=9, minute=0, timezone=WAT),
+    #     args=[application],
+    #     id="daily_digest",
+    #     name="Daily Market Digest",
+    #     replace_existing=True,
+    # )
 
-    # Price alert checker every 5 minutes
-    scheduler.add_job(
-        price_alert_checker_job,
-        trigger=IntervalTrigger(minutes=5),
-        args=[application],
-        id="price_alert_checker",
-        name="Price Alert Checker",
-        replace_existing=True,
-    )
+    # # Price alert checker every 5 minutes
+    # scheduler.add_job(
+    #     price_alert_checker_job,
+    #     trigger=IntervalTrigger(minutes=5),
+    #     args=[application],
+    #     id="price_alert_checker",
+    #     name="Price Alert Checker",
+    #     replace_existing=True,
+    # )
 
     # Weekly XP leaderboard post — Sundays at 12:00 PM WAT
     scheduler.add_job(
@@ -135,140 +135,140 @@ def shutdown_scheduler() -> None:
 # ---------------------------------------------------------------------------
 
 
-async def daily_digest_job(application: Application) -> None:
-    """
-    Post the daily market digest to the community group.
+# async def daily_digest_job(application: Application) -> None:
+#     """
+#     Post the daily market digest to the community group.
 
-    Called by APScheduler at 9:00 AM WAT every day.
+#     Called by APScheduler at 9:00 AM WAT every day.
 
-    Args:
-        application: The telegram.ext.Application instance
-    """
-    try:
-        from bot.handlers.market import build_daily_digest
+#     Args:
+#         application: The telegram.ext.Application instance
+#     """
+#     try:
+#         from bot.handlers.market import build_daily_digest
 
-        digest = await build_daily_digest()
+#         digest = await build_daily_digest()
 
-        await application.bot.send_message(
-            chat_id=COMMUNITY_GROUP_ID,
-            text=digest,
-            parse_mode="HTML",
-            link_preview_options=LinkPreviewOptions(is_disabled=True),
-        )
+#         await application.bot.send_message(
+#             chat_id=COMMUNITY_GROUP_ID,
+#             text=digest,
+#             parse_mode="HTML",
+#             link_preview_options=LinkPreviewOptions(is_disabled=True),
+#         )
 
-        logger.info("Daily digest posted to community group")
+#         logger.info("Daily digest posted to community group")
 
-    except Exception as exc:
-        logger.error("Failed to post daily digest: %s", exc)
-        # Notify admin channel about the failure
-        try:
-            await application.bot.send_message(
-                chat_id=ADMIN_CHANNEL_ID,
-                text=(
-                    "⚠️ <b>Scheduler Alert</b>\n\n"
-                    f"Daily digest failed to post.\nError: <code>{exc}</code>"
-                ),
-                parse_mode="HTML",
-            )
-        except Exception as notify_exc:
-            logger.error("Failed to notify admins about digest failure: %s", notify_exc)
-
-
-# ---------------------------------------------------------------------------
-# Job: Price Alert Checker (every 5 minutes)
-# ---------------------------------------------------------------------------
+#     except Exception as exc:
+#         logger.error("Failed to post daily digest: %s", exc)
+#         # Notify admin channel about the failure
+#         try:
+#             await application.bot.send_message(
+#                 chat_id=ADMIN_CHANNEL_ID,
+#                 text=(
+#                     "⚠️ <b>Scheduler Alert</b>\n\n"
+#                     f"Daily digest failed to post.\nError: <code>{exc}</code>"
+#                 ),
+#                 parse_mode="HTML",
+#             )
+#         except Exception as notify_exc:
+#             logger.error("Failed to notify admins about digest failure: %s", notify_exc)
 
 
-async def price_alert_checker_job(application: Application) -> None:
-    """
-    Check all active price alerts against current prices and notify users.
+# # ---------------------------------------------------------------------------
+# # Job: Price Alert Checker (every 5 minutes)
+# # ---------------------------------------------------------------------------
 
-    Fetches current prices for all coins with active alerts, compares
-    against target prices, and sends a DM to the user when triggered.
-    Triggered alerts are deactivated.
 
-    Args:
-        application: The telegram.ext.Application instance
-    """
-    try:
-        from database.alerts import deactivate_alert, get_active_alerts
-        from bot.handlers.market import (
-            COINGECKO_BASE,
-            COIN_SYMBOLS,
-            _cached_get,
-            _fmt_price,
-        )
+# async def price_alert_checker_job(application: Application) -> None:
+#     """
+#     Check all active price alerts against current prices and notify users.
 
-        alerts = await get_active_alerts()
-        if not alerts:
-            return
+#     Fetches current prices for all coins with active alerts, compares
+#     against target prices, and sends a DM to the user when triggered.
+#     Triggered alerts are deactivated.
 
-        # Collect unique coin IDs
-        coin_ids: set[str] = {a["coin_id"] for a in alerts}
-        coin_ids_str = ",".join(coin_ids)
+#     Args:
+#         application: The telegram.ext.Application instance
+#     """
+#     try:
+#         from database.alerts import deactivate_alert, get_active_alerts
+#         from bot.handlers.market import (
+#             COINGECKO_BASE,
+#             COIN_SYMBOLS,
+#             _cached_get,
+#             _fmt_price,
+#         )
 
-        # Fetch current prices in one API call
-        price_data = await _cached_get(
-            f"{COINGECKO_BASE}/simple/price",
-            {"ids": coin_ids_str, "vs_currencies": "usd"},
-        )
+#         alerts = await get_active_alerts()
+#         if not alerts:
+#             return
 
-        triggered_count = 0
+#         # Collect unique coin IDs
+#         coin_ids: set[str] = {a["coin_id"] for a in alerts}
+#         coin_ids_str = ",".join(coin_ids)
 
-        for alert in alerts:
-            coin_id = alert.get("coin_id", "")
-            target = float(alert.get("target_price", 0))
-            direction = alert.get("direction", "above")
-            user_id = alert.get("user_telegram_id")
-            alert_id = alert.get("id")
+#         # Fetch current prices in one API call
+#         price_data = await _cached_get(
+#             f"{COINGECKO_BASE}/simple/price",
+#             {"ids": coin_ids_str, "vs_currencies": "usd"},
+#         )
 
-            current_price = price_data.get(coin_id, {}).get("usd")
-            if current_price is None:
-                continue
+#         triggered_count = 0
 
-            triggered = False
-            if direction == "above" and current_price >= target:
-                triggered = True
-            elif direction == "below" and current_price <= target:
-                triggered = True
+#         for alert in alerts:
+#             coin_id = alert.get("coin_id", "")
+#             target = float(alert.get("target_price", 0))
+#             direction = alert.get("direction", "above")
+#             user_id = alert.get("user_telegram_id")
+#             alert_id = alert.get("id")
 
-            if triggered:
-                symbol = COIN_SYMBOLS.get(coin_id, coin_id.upper())
-                direction_emoji = "⬆️" if direction == "above" else "⬇️"
+#             current_price = price_data.get(coin_id, {}).get("usd")
+#             if current_price is None:
+#                 continue
 
-                msg = (
-                    f"🔔 <b>Price Alert Triggered!</b>\n\n"
-                    f"🪙 <b>{symbol}</b> has crossed your target!\n"
-                    f"🎯 Target: <code>${_fmt_price(target)}</code> "
-                    f"{direction_emoji} {direction}\n"
-                    f"💰 Current: <code>${_fmt_price(current_price)}</code>\n\n"
-                    f"📲 Trade now on <b>HostFi</b> — https://hostfi.io"
-                )
+#             triggered = False
+#             if direction == "above" and current_price >= target:
+#                 triggered = True
+#             elif direction == "below" and current_price <= target:
+#                 triggered = True
 
-                try:
-                    await application.bot.send_message(
-                        chat_id=user_id,
-                        text=msg,
-                        parse_mode="HTML",
-                        link_preview_options=LinkPreviewOptions(is_disabled=True),
-                    )
-                except Exception as send_exc:
-                    logger.warning(
-                        "Could not DM user %s for alert %s: %s",
-                        user_id,
-                        alert_id,
-                        send_exc,
-                    )
+#             if triggered:
+#                 symbol = COIN_SYMBOLS.get(coin_id, coin_id.upper())
+#                 direction_emoji = "⬆️" if direction == "above" else "⬇️"
 
-                # Deactivate alert regardless of DM success
-                await deactivate_alert(alert_id)
-                triggered_count += 1
+#                 msg = (
+#                     f"🔔 <b>Price Alert Triggered!</b>\n\n"
+#                     f"🪙 <b>{symbol}</b> has crossed your target!\n"
+#                     f"🎯 Target: <code>${_fmt_price(target)}</code> "
+#                     f"{direction_emoji} {direction}\n"
+#                     f"💰 Current: <code>${_fmt_price(current_price)}</code>\n\n"
+#                     f"📲 Trade now on <b>HostFi</b> — https://hostfi.io"
+#                 )
 
-        if triggered_count > 0:
-            logger.info("Price alert checker: %d alerts triggered", triggered_count)
+#                 try:
+#                     await application.bot.send_message(
+#                         chat_id=user_id,
+#                         text=msg,
+#                         parse_mode="HTML",
+#                         link_preview_options=LinkPreviewOptions(is_disabled=True),
+#                     )
+#                 except Exception as send_exc:
+#                     logger.warning(
+#                         "Could not DM user %s for alert %s: %s",
+#                         user_id,
+#                         alert_id,
+#                         send_exc,
+#                     )
 
-    except Exception as exc:
-        logger.error("Price alert checker failed: %s", exc)
+#                 # Deactivate alert regardless of DM success
+#                 await deactivate_alert(alert_id)
+#                 triggered_count += 1
+
+#         if triggered_count > 0:
+#             logger.info("Price alert checker: %d alerts triggered", triggered_count)
+
+#     except Exception as exc:
+#         logger.error("Price alert checker failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------
