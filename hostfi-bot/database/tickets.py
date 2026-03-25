@@ -43,7 +43,7 @@ async def create_ticket(
     """
     Create a new support ticket in the database.
 
-    Only one open/claimed ticket per user is allowed at a time.
+    Up to two open/claimed tickets per user are allowed at a time.
 
     Args:
         user_telegram_id: Telegram ID of the user filing the ticket
@@ -51,13 +51,13 @@ async def create_ticket(
 
     Returns:
         The inserted row dict with formatted ticket_id, or None if the
-        user already has an open ticket
+        user already has two active tickets
     """
 
     def _op() -> dict[str, Any] | None:
         client = get_supabase_client()
 
-        # Enforce one open ticket per user
+        # Enforce max two active tickets per user
         existing = (
             client.table("tickets")
             .select("id")
@@ -65,8 +65,8 @@ async def create_ticket(
             .in_("status", ["open", "claimed"])
             .execute()
         )
-        if existing.data:
-            return None  # Already has an active ticket
+        if len(existing.data or []) >= 2:
+            return None  # Already at max active tickets
 
         result = (
             client.table("tickets")
@@ -334,6 +334,41 @@ async def get_user_active_ticket(
     except Exception as exc:
         logger.error("Failed to check active ticket for %s: %s", user_telegram_id, exc)
         return None
+
+
+async def get_user_active_tickets(
+    user_telegram_id: int,
+) -> list[dict[str, Any]]:
+    """
+    Retrieve all active (open or claimed) tickets for a user.
+
+    Args:
+        user_telegram_id: Telegram ID of the user
+
+    Returns:
+        List of active ticket rows with formatted ticket_id
+    """
+
+    def _op() -> list[dict[str, Any]]:
+        client = get_supabase_client()
+        result = (
+            client.table("tickets")
+            .select("*")
+            .eq("user_telegram_id", user_telegram_id)
+            .in_("status", ["open", "claimed"])
+            .order("created_at", desc=False)
+            .execute()
+        )
+        rows = result.data or []
+        for row in rows:
+            row["ticket_id"] = _format_ticket_id(row["ticket_number"])
+        return rows
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to list active tickets for %s: %s", user_telegram_id, exc)
+        return []
 
 
 async def get_ticket_by_id(ticket_id: str) -> dict[str, Any] | None:

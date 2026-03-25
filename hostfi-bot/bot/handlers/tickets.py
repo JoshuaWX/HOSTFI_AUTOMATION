@@ -22,8 +22,8 @@ from database.tickets import (
     claim_ticket,
     create_ticket,
     get_all_active_tickets,
+    get_user_active_tickets,
     get_ticket_by_id,
-    get_user_active_ticket,
     rate_ticket,
     resolve_ticket,
 )
@@ -63,8 +63,8 @@ async def support_command(
     """
     Handle /support — start the ticket creation flow.
 
-    Checks if the user already has an open ticket. If not, prompts
-    the user to describe their issue.
+    Checks if the user has reached the active-ticket limit. If not,
+    prompts the user to describe their issue.
 
     Args:
         update: Incoming Telegram update
@@ -91,18 +91,21 @@ async def support_command(
             await _reply_error(update, context, "⏳ Too many requests. Please wait a moment.")
             return ConversationHandler.END
 
-        # Check for existing active ticket
-        active = await get_user_active_ticket(user_id)
-        if active:
-            ticket_id = active["ticket_id"]
-            status = active["status"]
+        # Enforce max two active tickets per user
+        active_tickets = await get_user_active_tickets(user_id)
+        if len(active_tickets) >= 2:
+            ticket_lines = []
+            for t in active_tickets[:2]:
+                ticket_lines.append(
+                    f"• <b>{html.escape(t['ticket_id'])}</b> ({html.escape(t['status'].capitalize())})"
+                )
             await _reply_error(
                 update,
                 context,
-                f"🎫 You already have an active ticket: <b>{ticket_id}</b>\n"
-                f"Status: <b>{status.capitalize()}</b>\n\n"
-                "Please wait for your current ticket to be resolved "
-                "before opening a new one.",
+                "🎫 You already have the maximum number of active tickets (2).\n\n"
+                "<b>Your active tickets:</b>\n"
+                f"{'\n'.join(ticket_lines)}\n\n"
+                "Please wait for one to be resolved before opening a new ticket.",
                 parse_mode="HTML",
             )
             return ConversationHandler.END
@@ -168,8 +171,8 @@ async def ticket_receive_description(
             await _reply_error(
                 update,
                 context,
-                "❌ You already have an open ticket. "
-                "Please wait for it to be resolved first.",
+                "❌ You already have 2 active tickets. "
+                "Please wait for one to be resolved first.",
             )
             return ConversationHandler.END
 
