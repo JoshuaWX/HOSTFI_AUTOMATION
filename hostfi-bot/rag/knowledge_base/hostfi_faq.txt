@@ -80,6 +80,9 @@ A: No. All crypto-to-crypto swaps are completely free on HostFi. Zero fees acros
 Q: What exchange rate do I get?
 A: The exact rate shown before you confirm the swap. No changes at checkout. The rate shown is the rate you get — no hidden markups.
 
+Q: How do I buy crypto on HostFi with Naira (NGN)?
+A: To swap on HostFi (buy crypto or swap crypto to Naira, or Naira to crypto): Open your HostFi app and tap Swap. Select the currency you want to pay with (Naira or any crypto), then choose what you want to swap into. You can choose Crypto -> Crypto or Crypto -> Naira (NGN), all within the same interface.
+
 Q: Can I swap between any cryptocurrencies?
 A: Yes, free swaps between any supported crypto pairs. Instant execution with transparent pricing.
 

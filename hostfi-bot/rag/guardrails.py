@@ -77,6 +77,10 @@ FEE_DISCLAIMER: str = (
     "as these may change)</i>"
 )
 
+FEE_DISCLAIMER_PLAIN: str = (
+    "please confirm current rates in the hostfi app as these may change"
+)
+
 OFF_TOPIC_MESSAGE: str = (
     "I can only help with questions about HOSTFI and its services. "
     "For other topics, please check relevant resources elsewhere."
@@ -199,6 +203,10 @@ def should_append_disclaimer(question: str, answer: str) -> bool:
     Returns:
         True if the answer or question references fees/rates
     """
+    answer_lower = answer.lower()
+    if FEE_DISCLAIMER_PLAIN in answer_lower:
+        return False
+
     combined = (question + " " + answer).lower()
     return any(kw in combined for kw in FEE_RATE_KEYWORDS)
 
