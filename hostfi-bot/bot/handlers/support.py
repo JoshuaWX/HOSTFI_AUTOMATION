@@ -6,6 +6,7 @@ Author: HOSTFI Bot Team
 
 import html
 import logging
+import time
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -52,6 +53,8 @@ async def ask_command(
     if not user or not update.message:
         return
 
+    total_start = time.perf_counter()
+
     # --- 1. Extract question ------------------------------------------------
     question = " ".join(context.args) if context.args else ""
 
@@ -75,16 +78,22 @@ async def ask_command(
         return
 
     # Show typing indicator while processing
+    chat_action_start = time.perf_counter()
     await context.bot.send_chat_action(
         chat_id=update.effective_chat.id, action="typing"
     )
+    chat_action_ms = (time.perf_counter() - chat_action_start) * 1000
 
     try:
         # --- 3. Retrieve relevant chunks ------------------------------------
+        retrieve_start = time.perf_counter()
         results = await retrieve(question, top_k=3)
+        retrieve_ms = (time.perf_counter() - retrieve_start) * 1000
 
         # --- 4. Guardrail checks --------------------------------------------
+        guardrail_start = time.perf_counter()
         guardrail = run_guardrails(question, results)
+        guardrail_ms = (time.perf_counter() - guardrail_start) * 1000
 
         if guardrail is not None:
             if guardrail.is_emergency:
@@ -111,6 +120,17 @@ async def ask_command(
                 guardrail.message, parse_mode="HTML"
             )
 
+            total_ms = (time.perf_counter() - total_start) * 1000
+            logger.info(
+                "AI latency breakdown (guardrail) user=%s total=%.1fms "
+                "chat_action=%.1fms retrieve=%.1fms guardrails=%.1fms",
+                user.id,
+                total_ms,
+                chat_action_ms,
+                retrieve_ms,
+                guardrail_ms,
+            )
+
             # Log the query as handled by guardrails
             await log_action(
                 action="ai_query",
@@ -126,12 +146,19 @@ async def ask_command(
             return
 
         # --- 5. Generate AI answer -------------------------------------------
+        context_start = time.perf_counter()
         kb_context = build_context(results)
+        context_ms = (time.perf_counter() - context_start) * 1000
+
+        generate_start = time.perf_counter()
         answer = await generate_answer(kb_context, question)
+        generate_ms = (time.perf_counter() - generate_start) * 1000
 
         # --- 6. Append disclaimer if answer mentions fees/rates ---------------
+        disclaimer_start = time.perf_counter()
         if should_append_disclaimer(question, answer):
             answer += FEE_DISCLAIMER
+        disclaimer_ms = (time.perf_counter() - disclaimer_start) * 1000
 
         # Format final response
         response = (
@@ -143,7 +170,9 @@ async def ask_command(
         if len(response) > 4000:
             response = response[:3997] + "..."
 
+        reply_start = time.perf_counter()
         await update.message.reply_text(response, parse_mode="HTML")
+        reply_ms = (time.perf_counter() - reply_start) * 1000
 
         # --- 7. Log successful AI query --------------------------------------
         top_score = results[0].score if results else 0.0
@@ -165,6 +194,22 @@ async def ask_command(
             user.id,
             top_score,
             question[:80],
+        )
+
+        total_ms = (time.perf_counter() - total_start) * 1000
+        logger.info(
+            "AI latency breakdown user=%s total=%.1fms chat_action=%.1fms "
+            "retrieve=%.1fms guardrails=%.1fms context=%.1fms "
+            "generate=%.1fms disclaimer=%.1fms reply=%.1fms",
+            user.id,
+            total_ms,
+            chat_action_ms,
+            retrieve_ms,
+            guardrail_ms,
+            context_ms,
+            generate_ms,
+            disclaimer_ms,
+            reply_ms,
         )
 
     except Exception as exc:

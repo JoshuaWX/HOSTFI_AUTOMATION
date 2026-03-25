@@ -6,6 +6,7 @@ Author: HOSTFI Bot Team
 
 import asyncio
 import logging
+import time
 from typing import NamedTuple
 
 from rag.ingestion import get_collection, get_embedding_model
@@ -44,6 +45,7 @@ def _query_sync(
     Returns:
         List of RetrievalResult ordered by descending similarity
     """
+    start = time.perf_counter()
     model = get_embedding_model()
     collection = get_collection()
 
@@ -54,13 +56,17 @@ def _query_sync(
         return []
 
     # Embed the query
+    embed_start = time.perf_counter()
     query_embedding = model.encode(query_text).tolist()
+    embed_ms = (time.perf_counter() - embed_start) * 1000
 
+    query_start = time.perf_counter()
     results = collection.query(
         query_embeddings=[query_embedding],
         n_results=min(top_k, count),
         include=["documents", "metadatas", "distances"],
     )
+    query_ms = (time.perf_counter() - query_start) * 1000
 
     # ChromaDB returns distances; for cosine space, distance = 1 - similarity
     retrieval_results: list[RetrievalResult] = []
@@ -82,6 +88,16 @@ def _query_sync(
 
     # Sort descending by score (should already be, but ensure)
     retrieval_results.sort(key=lambda r: r.score, reverse=True)
+
+    total_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "Retriever timing total=%.1fms embed=%.1fms query=%.1fms count=%d top_k=%d",
+        total_ms,
+        embed_ms,
+        query_ms,
+        count,
+        top_k,
+    )
     return retrieval_results
 
 
@@ -102,10 +118,13 @@ async def retrieve(
         Exception: If ChromaDB query fails
     """
     try:
+        start = time.perf_counter()
         results = await asyncio.to_thread(_query_sync, query, top_k)
+        elapsed_ms = (time.perf_counter() - start) * 1000
         logger.info(
-            "Retrieved %d chunks for query (top score: %.4f): %s",
+            "Retrieved %d chunks in %.1fms for query (top score: %.4f): %s",
             len(results),
+            elapsed_ms,
             results[0].score if results else 0.0,
             query[:80],
         )
