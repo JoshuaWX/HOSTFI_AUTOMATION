@@ -99,12 +99,13 @@ async def support_command(
                 ticket_lines.append(
                     f"• <b>{html.escape(t['ticket_id'])}</b> ({html.escape(t['status'].capitalize())})"
                 )
+            active_ticket_list = "\n".join(ticket_lines)
             await _reply_error(
                 update,
                 context,
                 "🎫 You already have the maximum number of active tickets (2).\n\n"
                 "<b>Your active tickets:</b>\n"
-                f"{'\n'.join(ticket_lines)}\n\n"
+                f"{active_ticket_list}\n\n"
                 "Please wait for one to be resolved before opening a new ticket.",
                 parse_mode="HTML",
             )
