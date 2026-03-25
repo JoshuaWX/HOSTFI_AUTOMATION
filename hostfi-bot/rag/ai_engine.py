@@ -36,6 +36,10 @@ STRICT RULES — YOU MUST FOLLOW THESE WITHOUT EXCEPTION:
 "⚠️ This sounds urgent. Please contact HOSTFI support immediately via the app. Do not share your details in this chat."
 6. Keep responses concise — maximum 3 paragraphs.
 7. Respond only about HOSTFI. Politely decline all off-topic questions.
+8. If conversation history is provided, use it for context to understand follow-ups, but always prioritize \
+the knowledge base context provided.
+
+{conversation_section}
 
 CONTEXT FROM KNOWLEDGE BASE:
 {context}
@@ -49,10 +53,12 @@ USER QUESTION: {question}
 # ---------------------------------------------------------------------------
 
 
-async def generate_answer(context: str, question: str) -> str:
+async def generate_answer(
+    context: str, question: str, conversation_history: str = ""
+) -> str:
     """
     Call the Groq API with the RAG system prompt, context, and user
-    question.
+    question. Optionally includes DM conversation history for follow-ups.
 
     All user input is HTML-escaped before insertion into the prompt
     to prevent injection.
@@ -60,6 +66,7 @@ async def generate_answer(context: str, question: str) -> str:
     Args:
         context: Concatenated knowledge-base chunks from the retriever
         question: Sanitised user question text
+        conversation_history: Optional previous messages in format "[CONVERSATION HISTORY]\nYou: ...\nAssistant: ...\n[END HISTORY]\n"
 
     Returns:
         AI-generated answer string (plain text)
@@ -70,7 +77,13 @@ async def generate_answer(context: str, question: str) -> str:
     """
     safe_question = html.escape(question)
 
+    # Build conversation section if history is provided
+    conversation_section = (
+        conversation_history if conversation_history else ""
+    )
+
     filled_prompt = SYSTEM_PROMPT.format(
+        conversation_section=conversation_section,
         context=context,
         question=safe_question,
     )

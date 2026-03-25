@@ -74,3 +74,18 @@ CREATE TABLE IF NOT EXISTS referrals (
 );
 
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals (referrer_telegram_id);
+
+-- DM Conversations table
+CREATE TABLE IF NOT EXISTS dm_conversations (
+    id                  BIGSERIAL PRIMARY KEY,
+    user_telegram_id    BIGINT NOT NULL,
+    session_id          TEXT NOT NULL,
+    message_role        TEXT NOT NULL CHECK (message_role IN ('user', 'assistant')),
+    message_content     TEXT NOT NULL,
+    created_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_dm_conversations_user_session 
+    ON dm_conversations (user_telegram_id, session_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_dm_conversations_session 
+    ON dm_conversations (session_id, created_at DESC);

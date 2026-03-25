@@ -7,12 +7,17 @@ Author: HOSTFI Bot Team
 import html
 import logging
 import time
+from datetime import datetime, timezone
 
 from telegram import Update
 from telegram.ext import ContextTypes
 
 from bot.utils.rate_limiter import check_rate_limit
 from config import ADMIN_CHANNEL_ID
+from database.dm_conversations import (
+    get_recent_dm_messages,
+    save_dm_message,
+)
 from database.logs import log_action
 from rag.ai_engine import generate_answer
 from rag.guardrails import (
@@ -23,6 +28,49 @@ from rag.guardrails import (
 from rag.retriever import build_context, retrieve
 
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+
+def _generate_session_id(user_telegram_id: int) -> str:
+    """
+    Generate a session ID based on user ID and today's date.
+
+    This ensures each user gets a new conversation session daily.
+
+    Args:
+        user_telegram_id: Telegram user ID
+
+    Returns:
+        Session ID string (format: "user_12345_2026-03-25")
+    """
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return f"user_{user_telegram_id}_{today}"
+
+
+def _format_conversation_history(messages: list[dict]) -> str:
+    """
+    Format a list of dm_conversation messages into a readable string.
+
+    Args:
+        messages: List of message dicts with keys: message_role, message_content
+
+    Returns:
+        Formatted conversation string (empty if no messages)
+    """
+    if not messages:
+        return ""
+
+    lines = ["[CONVERSATION HISTORY]"]
+    for msg in messages:
+        role = "You" if msg["message_role"] == "user" else "Assistant"
+        lines.append(f"{role}: {msg['message_content']}")
+    lines.append("[END HISTORY]\n")
+
+    return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
@@ -39,11 +87,13 @@ async def ask_command(
     Pipeline:
     1. Parse and validate the user question
     2. Rate-limit check (5 queries per user per hour)
-    3. Retrieve top-3 knowledge chunks from ChromaDB
-    4. Run guardrails (emergency → off-topic → confidence)
-    5. If guardrails pass: call Groq API with context + question
-    6. Optionally append fee/rate disclaimer
-    7. Log query to Supabase for quality monitoring
+    3. If DM: retrieve recent conversation history for session context
+    4. Retrieve top-3 knowledge chunks from ChromaDB
+    5. Run guardrails (emergency → off-topic → confidence)
+    6. If guardrails pass: call Groq API with context + question (+history if DM)
+    7. Optionally append fee/rate disclaimer
+    8. If DM: save question and response to conversation history
+    9. Log query to Supabase for quality monitoring
 
     Args:
         update: Incoming Telegram update
@@ -84,13 +134,23 @@ async def ask_command(
     )
     chat_action_ms = (time.perf_counter() - chat_action_start) * 1000
 
+    # --- 3. Check if DM and fetch conversation history ----------------------
+    is_dm = update.effective_chat.type == "private"
+    session_id = None
+    conversation_history = ""
+
+    if is_dm:
+        session_id = _generate_session_id(user.id)
+        recent_messages = await get_recent_dm_messages(user.id, session_id, limit=4)
+        conversation_history = _format_conversation_history(recent_messages)
+
     try:
-        # --- 3. Retrieve relevant chunks ------------------------------------
+        # --- 4. Retrieve relevant chunks ------------------------------------
         retrieve_start = time.perf_counter()
         results = await retrieve(question, top_k=3)
         retrieve_ms = (time.perf_counter() - retrieve_start) * 1000
 
-        # --- 4. Guardrail checks --------------------------------------------
+        # --- 5. Guardrail checks --------------------------------------------
         guardrail_start = time.perf_counter()
         guardrail = run_guardrails(question, results)
         guardrail_ms = (time.perf_counter() - guardrail_start) * 1000
@@ -145,16 +205,18 @@ async def ask_command(
             )
             return
 
-        # --- 5. Generate AI answer -------------------------------------------
+        # --- 6. Generate AI answer -------------------------------------------
         context_start = time.perf_counter()
         kb_context = build_context(results)
         context_ms = (time.perf_counter() - context_start) * 1000
 
         generate_start = time.perf_counter()
-        answer = await generate_answer(kb_context, question)
+        answer = await generate_answer(
+            kb_context, question, conversation_history=conversation_history
+        )
         generate_ms = (time.perf_counter() - generate_start) * 1000
 
-        # --- 6. Append disclaimer if answer mentions fees/rates ---------------
+        # --- 7. Append disclaimer if answer mentions fees/rates ---------------
         disclaimer_start = time.perf_counter()
         if should_append_disclaimer(question, answer):
             answer += FEE_DISCLAIMER
@@ -174,7 +236,12 @@ async def ask_command(
         await update.message.reply_text(response, parse_mode="HTML")
         reply_ms = (time.perf_counter() - reply_start) * 1000
 
-        # --- 7. Log successful AI query --------------------------------------
+        # --- 8. Save DM conversation history if in private chat ---------------
+        if is_dm and session_id:
+            await save_dm_message(user.id, session_id, "user", question)
+            await save_dm_message(user.id, session_id, "assistant", answer)
+
+        # --- 9. Log successful AI query --------------------------------------
         top_score = results[0].score if results else 0.0
         await log_action(
             action="ai_query",
