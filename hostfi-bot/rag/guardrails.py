@@ -73,8 +73,8 @@ EMERGENCY_MESSAGE: str = (
 )
 
 FEE_DISCLAIMER: str = (
-    "\n\n<i>(Please confirm current rates in the HOSTFI app "
-    "as these may change)</i>"
+    "\n\n(Please confirm current rates in the HOSTFI app "
+    "as these may change)"
 )
 
 FEE_DISCLAIMER_PLAIN: str = (

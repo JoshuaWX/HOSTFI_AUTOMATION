@@ -81,13 +81,13 @@ Q: What exchange rate do I get?
 A: The exact rate shown before you confirm the swap. No changes at checkout. The rate shown is the rate you get — no hidden markups.
 
 Q: How do I buy crypto on HostFi with Naira (NGN)?
-A: To swap on HostFi (buy crypto or swap crypto to Naira, or Naira to crypto): Open your HostFi app and tap Swap. Select the currency you want to pay with (Naira or any crypto), then choose what you want to swap into. You can choose Crypto -> Crypto or Crypto -> Naira (NGN), all within the same interface.
+A: On HostFi, buying crypto is done through Swap (there is no separate Buy flow in the app). Open your HostFi app and tap Swap. Select the currency you want to pay with (Naira or any crypto), then choose what you want to swap into. You can do Crypto -> Crypto, Crypto -> Naira (NGN), and Naira -> Crypto in the same interface.
 
 Q: Can I swap between any cryptocurrencies?
 A: Yes, free swaps between any supported crypto pairs. Instant execution with transparent pricing.
 
 Q: How do I swap on HostFi (crypto/naira)?
-A: Open your HostFi app and tap Swap. Select the currency you want to pay with (Naira or crypto) and the currency you want to receive. You can do Crypto -> Crypto, Crypto -> Naira (NGN), and Naira -> Crypto in the same interface.
+A: Open your HostFi app and tap Swap. Select the currency you want to pay with (Naira or crypto) and the currency you want to receive. You can do Crypto -> Crypto, Crypto -> Naira (NGN), and Naira -> Crypto in the same interface. This is also the same flow used to buy crypto with Naira.
 
 Q: What cryptocurrencies does HostFi support?
 A: Bitcoin (BTC), Tether (USDT), Ethereum (ETH), Solana (SOL), Binance Coin (BNB), USD Coin (USDC), Dogecoin (DOGE), Tron (TRX), Shiba Inu (SHIB), Stellar (XLM), Polygon (POL), and more. Additional cryptocurrencies are planned for future integration.
