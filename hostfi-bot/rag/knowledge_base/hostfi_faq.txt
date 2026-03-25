@@ -41,7 +41,7 @@ Q: Are there deposit fees?
 A: No. HostFi charges zero deposit fees. Fund your wallet without any charges.
 
 Q: How do I deposit NGN into my wallet?
-A: Go to your NGN wallet in the app, tap "Deposit", and you will receive a unique bank account number. Transfer NGN from your bank to this account number.
+A: Open your HostFi app, tap More > Deposit Fiat, then select Naira (NGN). Enter the deposit amount and tap Continue. Wait a few seconds while the app matches you with a bank provider, then your HostFi virtual bank account details (powered by a local bank) will appear. Transfer from a bank account that matches the same name on your HostFi account.
 
 Q: How long do deposits take?
 A: Deposits are instant in normal conditions. Occasional delays may occur due to external factors (like AWS outages), but funds are always safe.
@@ -55,10 +55,10 @@ A: Yes. Go to the crypto asset in your HostFi wallet, tap "Receive" or "Deposit"
 WITHDRAWALS
 
 Q: Can I withdraw to any bank?
-A: Yes, any Nigerian bank account verified in your name — Access, GTBank, Zenith, UBA, First Bank, and more. The account must be in your name for security and compliance.
+A: Yes. Open your HostFi app, tap Assets, choose Naira (NGN), then tap Withdraw. Enter amount and recipient account details, tap Continue, then Withdraw to confirm.
 
 Q: How long do withdrawals take?
-A: Withdrawals are typically instant to a few minutes.
+A: Transactions are typically processed within seconds in normal conditions.
 
 Q: My withdrawal failed. Why?
 A: Ensure the bank account is verified and in your name. Withdrawals are only allowed to bank accounts matching your HostFi account name. Contact support if the issue persists.
@@ -82,6 +82,9 @@ A: The exact rate shown before you confirm the swap. No changes at checkout. The
 
 Q: Can I swap between any cryptocurrencies?
 A: Yes, free swaps between any supported crypto pairs. Instant execution with transparent pricing.
+
+Q: How do I swap on HostFi (crypto/naira)?
+A: Open your HostFi app and tap Swap. Select the currency you want to pay with (Naira or crypto) and the currency you want to receive. You can do Crypto -> Crypto, Crypto -> Naira (NGN), and Naira -> Crypto in the same interface.
 
 Q: What cryptocurrencies does HostFi support?
 A: Bitcoin (BTC), Tether (USDT), Ethereum (ETH), Solana (SOL), Binance Coin (BNB), USD Coin (USDC), Dogecoin (DOGE), Tron (TRX), Shiba Inu (SHIB), Stellar (XLM), Polygon (POL), and more. Additional cryptocurrencies are planned for future integration.
@@ -109,10 +112,13 @@ A: Ensure your card is funded and the merchant accepts Visa/Mastercard. Check th
 TRANSFERS
 
 Q: How do I send money to another HostFi user?
-A: Use their email, phone number, or username. Zero fees, instant delivery.
+A: Open your HostFi app and go to Home. Tap More > Transfer Crypto/Fiat, select Naira (NGN), enter transfer amount, then tap Continue. Choose your preferred method (Email, Username, or Phone number), enter the recipient's HostFi details, then tap Send.
 
 Q: Are transfers to other HostFi users really free?
 A: Yes, completely free. Always. No fees ever.
+
+Q: How do I send Naira from HostFi directly to any Nigerian bank account?
+A: Open your HostFi app, tap Assets, choose Naira (NGN), then tap Withdraw. Enter the amount, provide recipient bank account details, tap Continue, then Withdraw to complete.
 
 HXP POINTS & REFERRALS
 
