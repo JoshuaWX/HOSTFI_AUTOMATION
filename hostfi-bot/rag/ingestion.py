@@ -11,6 +11,7 @@ import hashlib
 import logging
 import os
 import re
+import time
 from pathlib import Path
 
 import chromadb
@@ -18,7 +19,13 @@ import httpx
 from bs4 import BeautifulSoup
 from sentence_transformers import SentenceTransformer
 
-from config import CHROMA_PERSIST_PATH
+from config import (
+    CHROMA_PERSIST_PATH,
+    EMBEDDING_PROVIDER,
+    OPENROUTER_API_KEY,
+    OPENROUTER_EMBEDDING_MODEL,
+    OPENROUTER_EMBEDDING_URL,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +55,80 @@ def get_embedding_model() -> SentenceTransformer:
         _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
         logger.info("Embedding model loaded successfully")
     return _embedding_model
+
+
+def _embed_with_openrouter(texts: list[str]) -> list[list[float]]:
+    """Generate embeddings via OpenRouter-compatible embeddings endpoint."""
+    if not OPENROUTER_API_KEY:
+        raise RuntimeError("OPENROUTER_API_KEY is not set")
+
+    payload = {
+        "model": OPENROUTER_EMBEDDING_MODEL,
+        "input": texts,
+    }
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    with httpx.Client(timeout=30.0) as client:
+        response = client.post(
+            OPENROUTER_EMBEDDING_URL,
+            json=payload,
+            headers=headers,
+        )
+        response.raise_for_status()
+
+    data = response.json()
+    items = data.get("data", [])
+    if len(items) != len(texts):
+        raise RuntimeError(
+            f"OpenRouter embedding count mismatch: expected {len(texts)}, got {len(items)}"
+        )
+
+    # Preserve original input order using the index field when provided.
+    items_sorted = sorted(items, key=lambda item: item.get("index", 0))
+    return [item["embedding"] for item in items_sorted]
+
+
+def embed_texts(texts: list[str]) -> list[list[float]]:
+    """
+    Embed texts using configured provider with automatic fallback.
+
+    Provider selection:
+    - openrouter: hosted embeddings (preferred when OPENROUTER_API_KEY is set)
+    - local: sentence-transformers all-MiniLM-L6-v2
+    """
+    if not texts:
+        return []
+
+    provider = EMBEDDING_PROVIDER
+    start = time.perf_counter()
+
+    if provider == "openrouter" and OPENROUTER_API_KEY:
+        try:
+            vectors = _embed_with_openrouter(texts)
+            elapsed_ms = (time.perf_counter() - start) * 1000
+            logger.info(
+                "Embeddings provider=openrouter model=%s count=%d took=%.1fms",
+                OPENROUTER_EMBEDDING_MODEL,
+                len(texts),
+                elapsed_ms,
+            )
+            return vectors
+        except Exception as exc:
+            logger.error("OpenRouter embedding failed, falling back to local: %s", exc)
+
+    model = get_embedding_model()
+    vectors = model.encode(texts, show_progress_bar=False).tolist()
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    logger.info(
+        "Embeddings provider=local model=%s count=%d took=%.1fms",
+        EMBEDDING_MODEL_NAME,
+        len(texts),
+        elapsed_ms,
+    )
+    return vectors
 
 
 def get_chroma_client() -> chromadb.ClientAPI:
@@ -271,7 +352,6 @@ def embed_and_store(chunks: list[dict[str, str]]) -> int:
         logger.warning("No chunks to embed — skipping")
         return 0
 
-    model = get_embedding_model()
     collection = get_collection()
 
     texts = [c["text"] for c in chunks]
@@ -287,9 +367,7 @@ def embed_and_store(chunks: list[dict[str, str]]) -> int:
         batch_ids = ids[i : i + batch_size]
         batch_meta = metadatas[i : i + batch_size]
 
-        embeddings = model.encode(
-            batch_texts, show_progress_bar=False
-        ).tolist()
+        embeddings = embed_texts(batch_texts)
 
         collection.upsert(
             ids=batch_ids,

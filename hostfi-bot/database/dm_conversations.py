@@ -16,6 +16,48 @@ logger = logging.getLogger(__name__)
 SESSION_EXPIRY_SECONDS = 3600
 
 
+def _new_session_id(user_telegram_id: int) -> str:
+    """Create a unique session id for a user."""
+    return f"user_{user_telegram_id}_{int(datetime.now(timezone.utc).timestamp())}"
+
+
+async def get_active_session_id(user_telegram_id: int) -> str:
+    """
+    Return active session id for user, creating a new one if last activity is older than 1 hour.
+    """
+
+    def _op() -> str:
+        client = get_supabase_client()
+        latest = (
+            client.table("dm_conversations")
+            .select("session_id,created_at")
+            .eq("user_telegram_id", user_telegram_id)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        if not latest.data:
+            return _new_session_id(user_telegram_id)
+
+        latest_row = latest.data[0]
+        latest_dt = datetime.fromisoformat(latest_row["created_at"])
+        if latest_dt.tzinfo is None:
+            latest_dt = latest_dt.replace(tzinfo=timezone.utc)
+
+        age = datetime.now(timezone.utc) - latest_dt
+        if age.total_seconds() > SESSION_EXPIRY_SECONDS:
+            return _new_session_id(user_telegram_id)
+
+        return latest_row["session_id"]
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to get active session for user=%s: %s", user_telegram_id, exc)
+        return _new_session_id(user_telegram_id)
+
+
 # ---------------------------------------------------------------------------
 # Save Message
 # ---------------------------------------------------------------------------
@@ -127,18 +169,18 @@ async def get_recent_dm_messages(
             )
             return []
 
-        # Fetch the last N messages, ordered chronologically
+        # Fetch the last N messages, then return them oldest->newest
         messages = (
             client.table("dm_conversations")
             .select("id,message_role,message_content,created_at")
             .eq("user_telegram_id", user_telegram_id)
             .eq("session_id", session_id)
-            .order("created_at", desc=False)
+            .order("created_at", desc=True)
             .limit(limit)
             .execute()
         )
 
-        return messages.data or []
+        return list(reversed(messages.data or []))
 
     try:
         return await asyncio.to_thread(_op)

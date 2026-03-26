@@ -89,6 +89,23 @@ COMMUNITY_GROUP_ID: int = int(_raw_community_group) if _raw_community_group.stri
 GROQ_API_KEY: str = _require_env("GROQ_API_KEY")
 
 # ---------------------------------------------------------------------------
+# Embeddings
+# ---------------------------------------------------------------------------
+OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_EMBEDDING_MODEL: str = os.getenv(
+    "OPENROUTER_EMBEDDING_MODEL",
+    "openai/text-embedding-3-small",
+)
+OPENROUTER_EMBEDDING_URL: str = os.getenv(
+    "OPENROUTER_EMBEDDING_URL",
+    "https://openrouter.ai/api/v1/embeddings",
+)
+EMBEDDING_PROVIDER: str = os.getenv(
+    "EMBEDDING_PROVIDER",
+    "openrouter" if OPENROUTER_API_KEY else "local",
+).lower()
+
+# ---------------------------------------------------------------------------
 # Supabase
 # ---------------------------------------------------------------------------
 SUPABASE_URL: str = _require_env("SUPABASE_URL")

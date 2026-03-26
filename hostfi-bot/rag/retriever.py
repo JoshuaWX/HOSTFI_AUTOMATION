@@ -9,7 +9,7 @@ import logging
 import time
 from typing import NamedTuple
 
-from rag.ingestion import get_collection, get_embedding_model
+from rag.ingestion import embed_texts, get_collection
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +46,6 @@ def _query_sync(
         List of RetrievalResult ordered by descending similarity
     """
     start = time.perf_counter()
-    model = get_embedding_model()
     collection = get_collection()
 
     # Check that the collection has documents
@@ -57,7 +56,7 @@ def _query_sync(
 
     # Embed the query
     embed_start = time.perf_counter()
-    query_embedding = model.encode(query_text).tolist()
+    query_embedding = embed_texts([query_text])[0]
     embed_ms = (time.perf_counter() - embed_start) * 1000
 
     query_start = time.perf_counter()

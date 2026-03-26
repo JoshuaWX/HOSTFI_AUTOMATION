@@ -7,7 +7,6 @@ Author: HOSTFI Bot Team
 import html
 import logging
 import time
-from datetime import datetime, timezone
 
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -15,6 +14,7 @@ from telegram.ext import ContextTypes
 from bot.utils.rate_limiter import check_rate_limit
 from config import ADMIN_CHANNEL_ID
 from database.dm_conversations import (
+    get_active_session_id,
     get_recent_dm_messages,
     save_dm_message,
 )
@@ -28,27 +28,6 @@ from rag.guardrails import (
 from rag.retriever import build_context, retrieve
 
 logger = logging.getLogger(__name__)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _generate_session_id(user_telegram_id: int) -> str:
-    """
-    Generate a session ID based on user ID and today's date.
-
-    This ensures each user gets a new conversation session daily.
-
-    Args:
-        user_telegram_id: Telegram user ID
-
-    Returns:
-        Session ID string (format: "user_12345_2026-03-25")
-    """
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    return f"user_{user_telegram_id}_{today}"
 
 
 def _format_conversation_history(messages: list[dict]) -> str:
@@ -140,7 +119,7 @@ async def ask_command(
     conversation_history = ""
 
     if is_dm:
-        session_id = _generate_session_id(user.id)
+        session_id = await get_active_session_id(user.id)
         recent_messages = await get_recent_dm_messages(user.id, session_id, limit=4)
         conversation_history = _format_conversation_history(recent_messages)
 
