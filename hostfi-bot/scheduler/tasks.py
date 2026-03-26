@@ -356,7 +356,7 @@ async def daily_report_job(application: Application) -> None:
     try:
         from bot.handlers.admin import build_daily_report
 
-        report = await build_daily_report()
+        report = await build_daily_report(application.bot)
 
         await application.bot.send_message(
             chat_id=ADMIN_CHANNEL_ID,

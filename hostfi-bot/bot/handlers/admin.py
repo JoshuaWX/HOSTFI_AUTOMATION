@@ -9,16 +9,29 @@ import html
 import logging
 from datetime import datetime, timedelta, timezone
 
-from telegram import Update
+from telegram import Bot, Update
 from telegram.ext import ContextTypes
 
 from bot.utils.auto_delete import schedule_error_delete
 from bot.utils.permissions import is_admin, is_superadmin
 from bot.utils.permissions import is_admin_channel_chat
+from config import COMMUNITY_GROUP_ID
 from database.client import get_supabase_client
 from database.logs import log_action
 
 logger = logging.getLogger(__name__)
+
+
+async def _get_live_community_member_count(bot: Bot | None) -> int | None:
+    """Return live member count from Telegram group, or None if unavailable."""
+    if not bot or not COMMUNITY_GROUP_ID:
+        return None
+
+    try:
+        return await bot.get_chat_member_count(COMMUNITY_GROUP_ID)
+    except Exception as exc:
+        logger.warning("Could not fetch live community member count: %s", exc)
+        return None
 
 
 async def _reply_error(
@@ -71,11 +84,13 @@ async def stats_command(
         await update.effective_message.reply_text("📊 Loading stats...")
 
         stats = await _gather_stats()
+        live_members = await _get_live_community_member_count(context.bot)
+        community_members = live_members if live_members is not None else stats["total_users"]
 
         msg = (
             f"📊 <b>HOSTFI Bot Stats</b>\n"
             f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"👥 <b>Community:</b> {stats['total_users']:,} members"
+            f"👥 <b>Community:</b> {community_members:,} members"
             f" (+{stats['new_today']} today)\n"
             f"✅ Verified: {stats['verified_users']:,}\n"
             f"🚫 Banned: {stats['banned_users']:,}\n\n"
@@ -493,7 +508,7 @@ async def adminhelp_command(
 # ---------------------------------------------------------------------------
 
 
-async def build_daily_report() -> str:
+async def build_daily_report(bot: Bot | None = None) -> str:
     """
     Build the daily admin report message.
 
@@ -503,12 +518,14 @@ async def build_daily_report() -> str:
         HTML-formatted daily report string
     """
     stats = await _gather_stats()
+    live_members = await _get_live_community_member_count(bot)
+    community_members = live_members if live_members is not None else stats["total_users"]
     today = datetime.now(timezone.utc).strftime("%B %d, %Y")
 
     return (
         f"📊 <b>HOSTFI Bot Daily Report — {today}</b>\n"
         f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"👥 Community: <b>{stats['total_users']:,}</b> members"
+        f"👥 Community: <b>{community_members:,}</b> members"
         f" (+{stats['new_today']} today)\n"
         f"🤖 AI queries: {stats['ai_queries']}\n"
         f"🚫 Spam blocked: {stats['spam_blocked']}\n"
