@@ -5,6 +5,7 @@ Author: HOSTFI Bot Team
 """
 
 import logging
+import html
 from datetime import datetime, timezone, timedelta
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -13,6 +14,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from telegram import LinkPreviewOptions
 from telegram.ext import Application
 
+from bot.utils.formatter import field, title
 from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_IDS
 
 logger = logging.getLogger(__name__)
@@ -316,8 +318,9 @@ async def weekly_leaderboard_job(application: Application) -> None:
             await application.bot.send_message(
                 chat_id=ADMIN_CHANNEL_ID,
                 text=(
-                    "⚠️ <b>Scheduler Alert</b>\n\n"
-                    f"Weekly leaderboard failed to post.\nError: <code>{exc}</code>"
+                    f"{title('Scheduler Alert', '⚠️')}\n\n"
+                    "Weekly leaderboard failed to post.\n"
+                    f"{field('Error', f'<code>{html.escape(str(exc))}</code>')}"
                 ),
                 parse_mode="HTML",
             )
@@ -407,8 +410,9 @@ async def daily_report_job(application: Application) -> None:
             await application.bot.send_message(
                 chat_id=ADMIN_CHANNEL_ID,
                 text=(
-                    "⚠️ <b>Scheduler Alert</b>\n\n"
-                    f"Daily report failed to generate.\nError: <code>{exc}</code>"
+                    f"{title('Scheduler Alert', '⚠️')}\n\n"
+                    "Daily report failed to generate.\n"
+                    f"{field('Error', f'<code>{html.escape(str(exc))}</code>')}"
                 ),
                 parse_mode="HTML",
             )

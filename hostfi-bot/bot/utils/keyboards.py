@@ -27,23 +27,23 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(
-                "📲 Download HOSTFI App",
+                "Download App",
                 url="https://hostfi.io",
             ),
         ],
         [
             InlineKeyboardButton(
-                "📖 Community Rules",
+                "Rules",
                 callback_data="show_rules",
             ),
             InlineKeyboardButton(
-                "❓ Get Help",
+                "Help",
                 callback_data="show_help",
             ),
         ],
         [
             InlineKeyboardButton(
-                "🏆 XP Campaign",
+                "XP Campaign",
                 callback_data="campaign_home",
             ),
         ],
@@ -61,16 +61,16 @@ def campaign_home_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [
             [
-                InlineKeyboardButton("⭐ My XP", callback_data="campaign_xp"),
-                InlineKeyboardButton("🏅 Leaderboard", callback_data="campaign_leaderboard"),
+                InlineKeyboardButton("My XP", callback_data="campaign_xp"),
+                InlineKeyboardButton("Leaderboard", callback_data="campaign_leaderboard"),
             ],
             [
-                InlineKeyboardButton("👥 Invite Link", callback_data="campaign_invite"),
-                InlineKeyboardButton("🚀 Active Raids", callback_data="campaign_raids"),
+                InlineKeyboardButton("Invite Link", callback_data="campaign_invite"),
+                InlineKeyboardButton("Raids", callback_data="campaign_raids"),
             ],
             [
-                InlineKeyboardButton("🔗 Link X", callback_data="campaign_xlink_start"),
-                InlineKeyboardButton("✍️ Submit X Post", callback_data="campaign_xpost_start"),
+                InlineKeyboardButton("Link X", callback_data="campaign_xlink_start"),
+                InlineKeyboardButton("Submit X Post", callback_data="campaign_xpost_start"),
             ],
         ]
     )
@@ -87,7 +87,7 @@ def campaign_xverify_keyboard() -> InlineKeyboardMarkup:
     """Build the button shown after an X verification code is generated."""
     return InlineKeyboardMarkup(
         [
-            [InlineKeyboardButton("I Posted The Code", callback_data="campaign_xverify_start")],
+            [InlineKeyboardButton("Posted Code", callback_data="campaign_xverify_start")],
             [InlineKeyboardButton("Cancel", callback_data="campaign_cancel")],
         ]
     )
@@ -191,7 +191,7 @@ def ticket_keyboard(ticket_id: str, claimed: bool = False) -> InlineKeyboardMark
     buttons = [
         [
             InlineKeyboardButton(
-                "🎫 Claim Ticket",
+                "Claim Ticket",
                 callback_data=f"ticket_claim_{ticket_id}",
             ),
         ],
@@ -234,7 +234,7 @@ def rules_keyboard() -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(
-                "✅ I understand",
+                "I Understand",
                 callback_data="rules_acknowledged",
             ),
         ],
@@ -260,11 +260,11 @@ def confirm_broadcast_keyboard(broadcast_id: str) -> InlineKeyboardMarkup:
     buttons = [
         [
             InlineKeyboardButton(
-                "✅ Send Now",
+                "Send Now",
                 callback_data=f"broadcast_confirm_{broadcast_id}",
             ),
             InlineKeyboardButton(
-                "❌ Cancel",
+                "Cancel",
                 callback_data=f"broadcast_cancel_{broadcast_id}",
             ),
         ],

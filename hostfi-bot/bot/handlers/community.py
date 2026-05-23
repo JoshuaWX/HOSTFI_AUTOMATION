@@ -16,10 +16,13 @@ from bot.filters.scam_filter import run_scam_checks
 from bot.filters.spam_filter import run_spam_checks
 from bot.utils.auto_delete import schedule_delete
 from bot.utils.formatter import (
+    bullet,
+    field,
     format_flood_mute,
     format_rules,
     format_verification_prompt,
     format_welcome,
+    title,
 )
 from bot.utils.keyboards import (
     campaign_home_keyboard,
@@ -212,7 +215,7 @@ async def verification_callback(
     # Only the target user may answer their own CAPTCHA
     if query.from_user.id != target_user_id:
         await query.answer(
-            "⛔ This verification is not for you!", show_alert=True
+            "This verification is not for you.", show_alert=True
         )
         return
 
@@ -226,7 +229,7 @@ async def verification_callback(
 
     if correct_raw is None:
         await query.answer(
-            "⏰ Verification expired. Please leave and rejoin the group.",
+            "Verification expired. Please leave and rejoin.",
             show_alert=True,
         )
         return
@@ -257,11 +260,13 @@ async def verification_callback(
             name = query.from_user.first_name or "friend"
             await query.edit_message_text(
                 format_welcome(name)
-                + "\n\n✅ <b>Verified!</b> Welcome to the community!",
+                + "\n\n"
+                + title("Verified", "✅")
+                + "\nWelcome to the community.",
                 parse_mode="HTML",
                 reply_markup=welcome_keyboard(),
             )
-            await query.answer("✅ Verified! Welcome!")
+            await query.answer("Verified.")
 
             logger.info("User %s verified successfully", target_user_id)
 
@@ -275,7 +280,7 @@ async def verification_callback(
     else:
         # ❌ Wrong answer
         await query.answer(
-            "❌ Wrong answer — try again!", show_alert=True
+            "Wrong answer. Try again.", show_alert=True
         )
         logger.info(
             "User %s failed CAPTCHA (selected=%s correct=%s)",
@@ -330,8 +335,8 @@ async def _verification_timeout(
                     chat_id=chat_id,
                     message_id=message_id,
                     text=(
-                        "⏰ <b>Verification timed out.</b>\n\n"
-                        "The user was removed. They may rejoin and try again."
+                        title("Verification Timed Out", "⚠️")
+                        + "\n\nThe user was removed and may rejoin to try again."
                     ),
                     parse_mode="HTML",
                 )
@@ -464,12 +469,15 @@ async def group_message_filter(
     if scam_result.is_scam:
         try:
             await update.message.delete()
-            alert = (
-                f"🚨 <b>Scam Detected</b>\n\n"
-                f"👤 User: {html.escape(user.first_name or str(user.id))}\n"
-                f"🆔 ID: <code>{user.id}</code>\n"
-                f"📝 Reason: {html.escape(scam_result.reason)}\n"
-                f"⚠️ Severity: {scam_result.severity}"
+            alert = "\n".join(
+                [
+                    title("Scam Detected", "🚨"),
+                    "",
+                    field("User", html.escape(user.first_name or str(user.id))),
+                    field("ID", f"<code>{user.id}</code>"),
+                    field("Reason", html.escape(scam_result.reason)),
+                    field("Severity", scam_result.severity),
+                ]
             )
             await context.bot.send_message(
                 chat_id=ADMIN_CHANNEL_ID,
@@ -566,18 +574,8 @@ async def help_callback(
         return
 
     await query.answer()
-    help_text = (
-        "📚 <b>HOSTFI Bot Commands</b>\n\n"
-        "/help — Show this help menu\n"
-        "/rules — Community rules\n"
-        "/ask [question] — Ask the AI assistant\n"
-        "/support — Open a support ticket\n"
-        "/campaign — Open XP campaign panel\n"
-        "/rank — Your XP and rank\n"
-        "/leaderboard — Top 10 members\n"
-    )
     await query.message.reply_text(
-        help_text,
+        HELP_TEXT,
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
@@ -587,18 +585,22 @@ async def help_callback(
 # /help command
 # ---------------------------------------------------------------------------
 
-HELP_TEXT = (
-    "📚 <b>HOSTFI Bot Commands</b>\n\n"
-    "<b>General:</b>\n"
-    "/help — Show this help menu\n"
-    "/rules — Community rules\n\n"
-    "<b>AI &amp; Support:</b>\n"
-    "/ask [question] — Ask the AI assistant\n"
-    "/support — Open a support ticket\n\n"
-    "<b>Community:</b>\n"
-    "/campaign — Open XP campaign panel\n"
-    "/rank — Your XP and rank\n"
-    "/leaderboard — Top 10 members\n"
+HELP_TEXT = "\n".join(
+    [
+        title("HOSTFI Bot", "📚"),
+        "",
+        title("Core"),
+        bullet("<code>/rules</code> — Community rules"),
+        bullet("<code>/ask</code> — Ask the AI assistant"),
+        bullet("<code>/support</code> — Open a support ticket"),
+        "",
+        title("Campaign"),
+        bullet("<code>/campaign</code> — Open the XP panel"),
+        bullet("<code>/rank</code> — View your rank"),
+        bullet("<code>/leaderboard</code> — View top members"),
+        "",
+        "Use the buttons below for campaign actions.",
+    ]
 )
 
 

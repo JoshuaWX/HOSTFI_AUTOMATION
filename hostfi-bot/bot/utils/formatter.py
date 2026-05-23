@@ -9,6 +9,36 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+DIVIDER = "────────────"
+
+
+def title(text: str, icon: str | None = None) -> str:
+    """Return a consistent short HTML title line."""
+    prefix = f"{icon} " if icon else ""
+    return f"{prefix}<b>{html.escape(text)}</b>"
+
+
+def field(label: str, value: object) -> str:
+    """Return a compact label/value line."""
+    return f"<b>{html.escape(label)}</b>: {value}"
+
+
+def bullet(text: str) -> str:
+    """Return a clean user-facing bullet line."""
+    return f"• {text}"
+
+
+def status_text(kind: str, message: str) -> str:
+    """Return a consistent short status message."""
+    icons = {
+        "success": "✅",
+        "error": "❌",
+        "warning": "⚠️",
+        "info": "ℹ️",
+    }
+    icon = icons.get(kind, "ℹ️")
+    return f"{icon} {html.escape(message)}"
+
 
 # ---------------------------------------------------------------------------
 # Welcome / onboarding
@@ -25,18 +55,21 @@ def format_welcome(name: str) -> str:
     Returns:
         HTML-formatted welcome string
     """
-    safe_name = html.escape(name)
-    return (
-        f"🎉 <b>Welcome to HOSTFI Community, {safe_name}!</b>\n\n"
-        "The home of seamless crypto-fintech in Africa. 🌍\n\n"
-        "<b>What you can do on HOSTFI:</b>\n"
-        "• 💰 Buy &amp; sell crypto instantly\n"
-        "• 💳 Spend with virtual cards\n"
-        "• 🔄 Swap digital assets seamlessly\n"
-        "• 🏦 Deposit &amp; withdraw NGN\n\n"
-        "<b>Quick Commands:</b>\n"
-        "/help — See all commands\n"
-        "/support — Get help from our team"
+    return "\n".join(
+        [
+            title(f"Welcome to HOSTFI, {name}", "👋"),
+            "",
+            "Your home for seamless crypto-fintech in Africa.",
+            "",
+            title("What you can do"),
+            bullet("Buy and sell crypto instantly"),
+            bullet("Spend with virtual cards"),
+            bullet("Swap digital assets"),
+            bullet("Deposit and withdraw NGN"),
+            "",
+            title("Need help?"),
+            "Use the buttons below or send <code>/support</code>.",
+        ]
     )
 
 
@@ -52,10 +85,11 @@ def format_verification_prompt(num1: int, num2: int) -> str:
         HTML-formatted verification prompt
     """
     return (
-        f"\n\n🔒 <b>Verification Required</b>\n"
-        f"To prove you're human, solve this:\n\n"
-        f"<b>What is {num1} + {num2}?</b>\n\n"
-        "<i>Select the correct answer below. You have 5 minutes.</i>"
+        "\n\n"
+        + title("Verification", "🔒")
+        + "\n"
+        + f"Select the answer to <b>{num1} + {num2}</b>.\n"
+        + "<i>You have 5 minutes.</i>"
     )
 
 
@@ -78,16 +112,17 @@ def format_warn(username: str, reason: str, warn_count: int) -> str:
     """
     safe = html.escape(username)
     safe_reason = html.escape(reason)
-    next_ban = (
-        "\n🚨 <i>Next warning will result in a ban.</i>" if warn_count == 2 else ""
-    )
-    return (
-        f"⚠️ <b>Warning Issued</b>\n\n"
-        f"👤 User: {safe}\n"
-        f"📝 Reason: {safe_reason}\n"
-        f"⚡ Warnings: <b>{warn_count}/3</b>"
-        f"{next_ban}"
-    )
+    lines = [
+        title("Warning Issued", "⚠️"),
+        "",
+        field("User", safe),
+        field("Reason", safe_reason),
+        field("Warnings", f"<b>{warn_count}/3</b>"),
+    ]
+    if warn_count == 2:
+        lines.append("")
+        lines.append("<i>Next warning results in a ban.</i>")
+    return "\n".join(lines)
 
 
 def format_ban(username: str, reason: str) -> str:
@@ -103,11 +138,15 @@ def format_ban(username: str, reason: str) -> str:
     """
     safe = html.escape(username)
     safe_reason = html.escape(reason)
-    return (
-        f"🔨 <b>User Banned</b>\n\n"
-        f"👤 User: {safe}\n"
-        f"📝 Reason: {safe_reason}\n\n"
-        "This action has been logged."
+    return "\n".join(
+        [
+            title("User Banned", "⛔"),
+            "",
+            field("User", safe),
+            field("Reason", safe_reason),
+            "",
+            "This action has been logged.",
+        ]
     )
 
 
@@ -126,12 +165,16 @@ def format_mute(username: str, duration: str, reason: str) -> str:
     safe = html.escape(username)
     safe_reason = html.escape(reason)
     safe_duration = html.escape(duration)
-    return (
-        f"🔇 <b>User Muted</b>\n\n"
-        f"👤 User: {safe}\n"
-        f"⏱️ Duration: {safe_duration}\n"
-        f"📝 Reason: {safe_reason}\n\n"
-        "The user cannot send messages until the mute expires."
+    return "\n".join(
+        [
+            title("User Muted", "🔇"),
+            "",
+            field("User", safe),
+            field("Duration", safe_duration),
+            field("Reason", safe_reason),
+            "",
+            "The user cannot send messages until the mute expires.",
+        ]
     )
 
 
@@ -146,11 +189,7 @@ def format_unmute(username: str) -> str:
         HTML-formatted unmute string
     """
     safe = html.escape(username)
-    return (
-        f"🔊 <b>User Unmuted</b>\n\n"
-        f"👤 User: {safe}\n\n"
-        "The user can now send messages again."
-    )
+    return "\n".join([title("User Unmuted", "✅"), "", field("User", safe)])
 
 
 def format_unban(username: str) -> str:
@@ -164,11 +203,7 @@ def format_unban(username: str) -> str:
         HTML-formatted unban string
     """
     safe = html.escape(username)
-    return (
-        f"✅ <b>User Unbanned</b>\n\n"
-        f"👤 User: {safe}\n\n"
-        "The user may now rejoin the group."
-    )
+    return "\n".join([title("User Unbanned", "✅"), "", field("User", safe)])
 
 
 def format_kick(username: str, reason: str) -> str:
@@ -184,11 +219,15 @@ def format_kick(username: str, reason: str) -> str:
     """
     safe = html.escape(username)
     safe_reason = html.escape(reason)
-    return (
-        f"👢 <b>User Kicked</b>\n\n"
-        f"👤 User: {safe}\n"
-        f"📝 Reason: {safe_reason}\n\n"
-        "The user can rejoin the group via invite link."
+    return "\n".join(
+        [
+            title("User Kicked", "⛔"),
+            "",
+            field("User", safe),
+            field("Reason", safe_reason),
+            "",
+            "The user can rejoin with a valid invite link.",
+        ]
     )
 
 
@@ -203,11 +242,13 @@ def format_flood_mute(username: str) -> str:
         HTML-formatted flood mute string
     """
     safe = html.escape(username)
-    return (
-        f"🚿 <b>Flood Control</b>\n\n"
-        f"👤 {safe} has been muted for <b>5 minutes</b> "
-        "for sending too many messages.\n\n"
-        "Please slow down."
+    return "\n".join(
+        [
+            title("Flood Control", "⚠️"),
+            "",
+            f"{safe} has been muted for <b>5 minutes</b>.",
+            "Please slow down.",
+        ]
     )
 
 
@@ -223,16 +264,19 @@ def format_rules() -> str:
     Returns:
         HTML-formatted community rules string
     """
-    return (
-        "📜 <b>HOSTFI Community Rules</b>\n\n"
-        "1️⃣ <b>Be Respectful</b> — No harassment, hate speech, or personal attacks.\n"
-        "2️⃣ <b>No Spam</b> — No promotional messages, repetitive content, or unsolicited links.\n"
-        "3️⃣ <b>No Scams</b> — Do not share wallet addresses, phishing links, or impersonate staff.\n"
-        "4️⃣ <b>Stay On Topic</b> — Keep conversations relevant to HOSTFI and crypto-fintech.\n"
-        "5️⃣ <b>No Financial Advice</b> — Do not give investment recommendations to other members.\n"
-        "6️⃣ <b>English Only</b> — Use English in the main group chat.\n"
-        "7️⃣ <b>Report Issues</b> — Use /support to report problems. Do not post personal issues publicly.\n"
-        "8️⃣ <b>Follow Admin Instructions</b> — Admins have the final say on disputes.\n\n"
-        "⚠️ <b>Violations lead to:</b> Warning → Mute → Ban\n\n"
-        "Thank you for being part of the HOSTFI community! 🌍"
+    return "\n".join(
+        [
+            title("Community Rules", "📜"),
+            "",
+            bullet("<b>Be respectful</b> — no harassment or personal attacks."),
+            bullet("<b>No spam</b> — avoid promos, repetition, and unsolicited links."),
+            bullet("<b>No scams</b> — no phishing, wallet requests, or impersonation."),
+            bullet("<b>Stay on topic</b> — keep discussion relevant to HOSTFI."),
+            bullet("<b>No financial advice</b> — avoid investment recommendations."),
+            bullet("<b>English only</b> — use English in the main group chat."),
+            bullet("<b>Use support</b> — send private issues through <code>/support</code>."),
+            bullet("<b>Respect admins</b> — moderator decisions are final."),
+            "",
+            field("Violations", "Warning → Mute → Ban"),
+        ]
     )

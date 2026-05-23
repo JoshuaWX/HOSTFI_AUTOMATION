@@ -12,6 +12,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ContextTypes, ConversationHandler
 
 from bot.utils.auto_delete import schedule_error_delete
+from bot.utils.formatter import field, status_text, title
 from bot.utils.keyboards import rating_keyboard, ticket_keyboard
 from bot.utils.permissions import is_admin, is_admin_channel_chat
 from bot.utils.rate_limiter import check_rate_limit
@@ -80,14 +81,14 @@ async def support_command(
             await _reply_error(
                 update,
                 context,
-                "⛔ /support is available in DM only. Please message the bot privately.",
+                status_text("error", "/support is available in DM only. Please message the bot privately."),
             )
             return ConversationHandler.END
 
         user_id = update.effective_user.id
 
         if not await check_rate_limit(user_id, "command", limit=10, window=60):
-            await _reply_error(update, context, "⏳ Too many requests. Please wait a moment.")
+            await _reply_error(update, context, status_text("warning", "Too many requests. Please wait a moment."))
             return ConversationHandler.END
 
         # Enforce max two active tickets per user
@@ -102,8 +103,9 @@ async def support_command(
             await _reply_error(
                 update,
                 context,
-                "🎫 You already have the maximum number of active tickets (2).\n\n"
-                "<b>Your active tickets:</b>\n"
+                f"{title('Active Ticket Limit', '🎫')}\n\n"
+                "You already have the maximum number of active tickets (2).\n\n"
+                "<b>Your active tickets</b>\n"
                 f"{active_ticket_list}\n\n"
                 "Please wait for one to be resolved before opening a new ticket.",
                 parse_mode="HTML",
@@ -111,10 +113,10 @@ async def support_command(
             return ConversationHandler.END
 
         await update.effective_message.reply_text(
-            "🎫 <b>HOSTFI Support</b>\n\n"
+            f"{title('HOSTFI Support', '🎫')}\n\n"
             "Please briefly describe your issue in a single message.\n\n"
             "<i>Be specific to help our team resolve it faster.</i>\n\n"
-            "Send /cancel to abort.",
+            "Send <code>/cancel</code> to abort.",
             parse_mode="HTML",
         )
         return TICKET_DESCRIPTION
@@ -153,14 +155,14 @@ async def ticket_receive_description(
         description = (update.effective_message.text or "").strip()
 
         if not description:
-            await _reply_error(update, context, "❌ Please send a text description of your issue.")
+            await _reply_error(update, context, status_text("error", "Please send a text description of your issue."))
             return TICKET_DESCRIPTION
 
         if len(description) > 2000:
             await _reply_error(
                 update,
                 context,
-                "❌ Description too long. Please keep it under 2000 characters.",
+                status_text("error", "Description too long. Please keep it under 2000 characters."),
             )
             return TICKET_DESCRIPTION
 
@@ -171,8 +173,7 @@ async def ticket_receive_description(
             await _reply_error(
                 update,
                 context,
-                "❌ You already have 2 active tickets. "
-                "Please wait for one to be resolved first.",
+                status_text("error", "You already have 2 active tickets. Please wait for one to be resolved first."),
             )
             return ConversationHandler.END
 
@@ -182,29 +183,31 @@ async def ticket_receive_description(
 
         # Confirm to user
         await update.effective_message.reply_text(
-            f"✅ <b>Ticket Created!</b>\n\n"
-            f"🎫 <b>Ticket ID:</b> {ticket_id}\n"
-            f"📝 <b>Issue:</b> {safe_desc}\n\n"
+            f"{title('Ticket Created', '✅')}\n\n"
+            f"{field('Ticket', ticket_id)}\n"
+            f"{field('Issue', safe_desc)}\n\n"
             "Our support team has been notified and will get back "
             "to you shortly. You'll receive a message when an agent "
             "claims your ticket.",
             parse_mode="HTML",
             reply_markup=InlineKeyboardMarkup([
                 [InlineKeyboardButton(
-                    "❌ Cancel Ticket",
+                    "Cancel Ticket",
                     callback_data=f"ticket_cancel_{ticket_id}",
                 )]
             ]),
         )
 
         # Post to admin channel with claim button
-        admin_alert = (
-            f"🎫 <b>New Support Ticket</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"🆔 <b>Ticket:</b> {ticket_id}\n"
-            f"👤 <b>User:</b> <a href='tg://user?id={user.id}'>{safe_name}</a> (<code>{user.id}</code>)\n"
-            f"📝 <b>Issue:</b>\n{safe_desc}\n\n"
-            f"🕐 <b>Created:</b> {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"
+        admin_alert = "\n".join(
+            [
+                title("New Support Ticket", "🎫"),
+                "",
+                field("Ticket", ticket_id),
+                field("User", f"<a href='tg://user?id={user.id}'>{safe_name}</a> (<code>{user.id}</code>)"),
+                field("Issue", safe_desc),
+                field("Created", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
+            ]
         )
 
         await context.bot.send_message(
@@ -235,7 +238,7 @@ async def ticket_receive_description(
             await _reply_error(
                 update,
                 context,
-                "⚠️ Something went wrong. Please try /support again.",
+                status_text("warning", "Something went wrong. Please try /support again."),
             )
         return ConversationHandler.END
 
@@ -260,7 +263,7 @@ async def ticket_cancel(
     """
     if update.effective_message:
         await update.effective_message.reply_text(
-            "❌ Ticket creation cancelled."
+            status_text("info", "Ticket creation cancelled.")
         )
     return ConversationHandler.END
 
@@ -295,17 +298,17 @@ async def ticket_cancel_callback(
 
     if ticket is None:
         await query.answer(
-            "❌ Cannot cancel — ticket not found, already claimed, or not yours.",
+            "Cannot cancel. Ticket not found, already claimed, or not yours.",
             show_alert=True,
         )
         return
 
-    await query.answer(f"✅ Ticket {ticket_id} cancelled")
+    await query.answer(f"Ticket {ticket_id} cancelled")
 
     # Update the user's message to reflect cancellation
     await query.edit_message_text(
-        f"🎫 <b>Ticket {ticket_id}</b> — <i>Cancelled</i>\n\n"
-        "You can open a new ticket anytime with /support.",
+        title(f"Ticket {ticket_id} Cancelled", "🎫")
+        + "\n\nYou can open a new ticket anytime with <code>/support</code>.",
         parse_mode="HTML",
     )
 
@@ -341,7 +344,7 @@ async def ticket_claim_callback(
         return
 
     if not await is_admin(query.from_user.id, bot=context.bot):
-        await query.answer("⛔ Admins only.", show_alert=True)
+        await query.answer("Admins only.", show_alert=True)
         return
 
     # Parse ticket_id from callback data: ticket_claim_HSTF-0001
@@ -352,22 +355,23 @@ async def ticket_claim_callback(
     ticket_id = parts[2]
     admin_id = query.from_user.id
     admin_name = html.escape(query.from_user.first_name or str(admin_id))
+    admin_link = f"<a href='tg://user?id={admin_id}'>{admin_name}</a>"
 
     ticket = await claim_ticket(ticket_id, admin_id)
 
     if ticket is None:
         await query.answer(
-            "❌ Ticket not found or already claimed.",
+            "Ticket not found or already claimed.",
             show_alert=True,
         )
         return
 
-    await query.answer(f"✅ You claimed {ticket_id}")
+    await query.answer(f"You claimed {ticket_id}")
 
     # Update the admin channel message with claimed status and remove claim button
     await query.edit_message_text(
         query.message.text_html
-        + f"\n\n✅ <b>Claimed by:</b> <a href='tg://user?id={admin_id}'>{admin_name}</a>",
+        + f"\n\n{field('Claimed by', admin_link)}",
         parse_mode="HTML",
         reply_markup=None,
     )
@@ -378,10 +382,10 @@ async def ticket_claim_callback(
         await context.bot.send_message(
             chat_id=user_telegram_id,
             text=(
-                f"🎫 <b>Ticket Update — {ticket_id}</b>\n\n"
-                f"An agent has picked up your ticket. "
+                f"{title(f'Ticket Update — {ticket_id}', '🎫')}\n\n"
+                "An agent has picked up your ticket. "
                 "They'll contact you shortly.\n\n"
-                f"🧑‍💼 <b>Agent:</b> <a href='tg://user?id={admin_id}'>{admin_name}</a>\n\n"
+                f"{field('Agent', admin_link)}\n\n"
                 "<i>Please be patient while we review your issue.</i>"
             ),
             parse_mode="HTML",
@@ -428,12 +432,12 @@ async def reply_command(
             await _reply_error(
                 update,
                 context,
-                "⛔ This command can only be used in the admin group.",
+                status_text("error", "This command can only be used in the admin group."),
             )
             return
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
-            await _reply_error(update, context, "⛔ This command is for admins only.")
+            await _reply_error(update, context, status_text("error", "This command is for admins only."))
             return
 
         text = update.effective_message.text or ""
@@ -443,7 +447,7 @@ async def reply_command(
             await _reply_error(
                 update,
                 context,
-                "ℹ️ <b>Usage:</b>\n"
+                "<b>Usage</b>\n"
                 "<code>/reply HSTF-0001 Your message here</code>",
                 parse_mode="HTML",
             )
@@ -458,7 +462,7 @@ async def reply_command(
             await _reply_error(
                 update,
                 context,
-                f"❌ Ticket <b>{html.escape(ticket_id)}</b> not found.",
+                status_text("error", f"Ticket {ticket_id} not found."),
                 parse_mode="HTML",
             )
             return
@@ -467,7 +471,7 @@ async def reply_command(
             await _reply_error(
                 update,
                 context,
-                f"❌ Ticket <b>{ticket_id}</b> is already {ticket['status']}.",
+                status_text("error", f"Ticket {ticket_id} is already {ticket['status']}."),
             )
             return
 
@@ -483,19 +487,18 @@ async def reply_command(
             await context.bot.send_message(
                 chat_id=user_telegram_id,
                 text=(
-                    f"💬 <b>Support Reply — {ticket_id}</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━\n\n"
-                    f"🧑‍💼 <b><a href='tg://user?id={admin_id}'>{admin_name}</a>:</b>\n"
+                    f"{title(f'Support Reply — {ticket_id}', '💬')}\n\n"
+                    f"<b><a href='tg://user?id={admin_id}'>{admin_name}</a></b>\n"
                     f"{safe_message}"
                 ),
                 parse_mode="HTML",
             )
         except Exception as send_exc:
-            await _reply_error(update, context, f"⚠️ Could not send message to user: {send_exc}")
+            await _reply_error(update, context, status_text("warning", f"Could not send message to user: {send_exc}"))
             return
 
         await update.effective_message.reply_text(
-            f"✅ Reply sent to the user for ticket <b>{ticket_id}</b>.",
+            status_text("success", f"Reply sent to the user for ticket {ticket_id}."),
             parse_mode="HTML",
         )
 
@@ -538,12 +541,12 @@ async def close_command(
             await _reply_error(
                 update,
                 context,
-                "⛔ This command can only be used in the admin group.",
+                status_text("error", "This command can only be used in the admin group."),
             )
             return
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
-            await _reply_error(update, context, "⛔ This command is for admins only.")
+            await _reply_error(update, context, status_text("error", "This command is for admins only."))
             return
 
         text = update.effective_message.text or ""
@@ -553,7 +556,7 @@ async def close_command(
             await _reply_error(
                 update,
                 context,
-                "ℹ️ <b>Usage:</b>\n"
+                "<b>Usage</b>\n"
                 "<code>/close HSTF-0001</code>",
                 parse_mode="HTML",
             )
@@ -566,8 +569,7 @@ async def close_command(
             await _reply_error(
                 update,
                 context,
-                f"❌ Ticket <b>{html.escape(ticket_id)}</b> not found "
-                "or not in claimed status.",
+                status_text("error", f"Ticket {ticket_id} not found or not in claimed status."),
                 parse_mode="HTML",
             )
             return
@@ -579,10 +581,9 @@ async def close_command(
             await context.bot.send_message(
                 chat_id=user_telegram_id,
                 text=(
-                    f"✅ <b>Ticket Resolved — {ticket_id}</b>\n\n"
+                    f"{title(f'Ticket Resolved — {ticket_id}', '✅')}\n\n"
                     "Your support ticket has been resolved.\n\n"
-                    "How would you rate our support? "
-                    "Tap a rating below:"
+                    "How would you rate our support? Tap a rating below."
                 ),
                 parse_mode="HTML",
                 reply_markup=rating_keyboard(ticket_id),
@@ -595,8 +596,7 @@ async def close_command(
             )
 
         await update.effective_message.reply_text(
-            f"✅ Ticket <b>{ticket_id}</b> resolved. "
-            "User has been notified with a rating prompt.",
+            status_text("success", f"Ticket {ticket_id} resolved. User has been notified with a rating prompt."),
             parse_mode="HTML",
         )
 
@@ -665,7 +665,7 @@ async def rating_callback(
 
     if ticket.get("user_telegram_id") != query.from_user.id:
         await query.answer(
-            "⛔ This rating is not for you!", show_alert=True
+            "This rating is not for you.", show_alert=True
         )
         return
 
@@ -678,15 +678,15 @@ async def rating_callback(
     # Store rating
     result = await rate_ticket(ticket_id, rating)
     if not result:
-        await query.answer("❌ Failed to save rating.", show_alert=True)
+        await query.answer("Failed to save rating.", show_alert=True)
         return
 
     stars = "⭐" * rating
     await query.answer(f"Thank you! {stars}")
     await query.edit_message_text(
-        f"✅ <b>Ticket {ticket_id} — Closed</b>\n\n"
-        f"Your rating: {stars} ({rating}/5)\n\n"
-        "Thank you for your feedback! 🙏",
+        f"{title(f'Ticket {ticket_id} Closed', '✅')}\n\n"
+        f"{field('Rating', f'{stars} ({rating}/5)')}\n\n"
+        "Thank you for your feedback.",
         parse_mode="HTML",
     )
 
@@ -695,9 +695,9 @@ async def rating_callback(
         await context.bot.send_message(
             chat_id=ADMIN_CHANNEL_ID,
             text=(
-                f"📊 <b>Ticket Rating — {ticket_id}</b>\n\n"
-                f"Rating: {stars} ({rating}/5)\n"
-                f"User: <code>{query.from_user.id}</code>"
+                f"{title(f'Ticket Rating — {ticket_id}', '📊')}\n\n"
+                f"{field('Rating', f'{stars} ({rating}/5)')}\n"
+                f"{field('User', f'<code>{query.from_user.id}</code>')}"
             ),
             parse_mode="HTML",
         )
@@ -739,43 +739,43 @@ async def tickets_command(
             await _reply_error(
                 update,
                 context,
-                "⛔ This command can only be used in the admin group.",
+                status_text("error", "This command can only be used in the admin group."),
             )
             return
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
-            await _reply_error(update, context, "⛔ This command is for admins only.")
+            await _reply_error(update, context, status_text("error", "This command is for admins only."))
             return
 
         tickets = await get_all_active_tickets()
 
         if not tickets:
-            await _reply_error(update, context, "📭 No active tickets at the moment.")
+            await _reply_error(update, context, status_text("info", "No active tickets at the moment."))
             return
 
-        status_emoji = {"open": "🟡", "claimed": "🟢"}
+        status_label = {"open": "Open", "claimed": "Claimed"}
         lines: list[str] = [
-            "🎫 <b>Active Support Tickets</b>",
-            "━━━━━━━━━━━━━━━━━━",
+            title("Active Support Tickets", "🎫"),
+            "",
         ]
 
         for t in tickets:
             tid = t["ticket_id"]
             status = t.get("status", "open")
-            emoji = status_emoji.get(status, "⚪")
+            label = status_label.get(status, status.capitalize())
             user_id = t.get("user_telegram_id", "?")
             desc = html.escape((t.get("issue_description") or "")[:80])
             admin_id = t.get("assigned_admin_id")
             admin_info = f" → Admin <code>{admin_id}</code>" if admin_id else ""
 
             lines.append(
-                f"\n{emoji} <b>{tid}</b> [{status}]{admin_info}\n"
-                f"   👤 <code>{user_id}</code>\n"
-                f"   📝 {desc}"
+                f"<b>{tid}</b> [{label}]{admin_info}\n"
+                f"{field('User', f'<code>{user_id}</code>')}\n"
+                f"{field('Issue', desc)}"
             )
 
-        lines.append(f"\n━━━━━━━━━━━━━━━━━━")
-        lines.append(f"Total: <b>{len(tickets)}</b> active ticket(s)")
+        lines.append("")
+        lines.append(field("Total", f"<b>{len(tickets)}</b> active ticket(s)"))
 
         await update.effective_message.reply_text(
             "\n".join(lines), parse_mode="HTML"
@@ -783,7 +783,7 @@ async def tickets_command(
 
     except Exception as exc:
         logger.error("Error in tickets_command: %s", exc)
-        await _reply_error(update, context, "⚠️ Something went wrong. Please try again.")
+        await _reply_error(update, context, status_text("warning", "Something went wrong. Please try again."))
 
 
 # ---------------------------------------------------------------------------
@@ -821,14 +821,12 @@ async def build_escalation_alerts(bot) -> int:
             await bot.send_message(
                 chat_id=ADMIN_CHANNEL_ID,
                 text=(
-                    f"🚨 <b>ESCALATION — Unclaimed Ticket!</b>\n"
-                    f"━━━━━━━━━━━━━━━━━━\n\n"
-                    f"🆔 <b>Ticket:</b> {ticket_id}\n"
-                    f"👤 <b>User:</b> <code>{user_id}</code>\n"
-                    f"📝 <b>Issue:</b>\n{desc}\n\n"
-                    f"🕐 <b>Created:</b> {created}\n\n"
-                    "⚠️ This ticket has been waiting <b>2+ hours</b> "
-                    "without being claimed!"
+                    f"{title('Unclaimed Ticket', '🚨')}\n\n"
+                    f"{field('Ticket', ticket_id)}\n"
+                    f"{field('User', f'<code>{user_id}</code>')}\n"
+                    f"{field('Issue', desc)}\n"
+                    f"{field('Created', created)}\n\n"
+                    "This ticket has been waiting <b>2+ hours</b> without being claimed."
                 ),
                 parse_mode="HTML",
                 reply_markup=ticket_keyboard(ticket_id),

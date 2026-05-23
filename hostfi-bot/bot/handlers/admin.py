@@ -13,6 +13,7 @@ from telegram import Bot, Update
 from telegram.ext import ContextTypes
 
 from bot.utils.auto_delete import schedule_error_delete
+from bot.utils.formatter import bullet, field, status_text, title
 from bot.utils.permissions import is_admin, is_superadmin
 from bot.utils.permissions import is_admin_channel_chat
 from config import COMMUNITY_GROUP_IDS
@@ -80,46 +81,49 @@ async def stats_command(
             await _reply_error(
                 update,
                 context,
-                "⛔ This command can only be used in the admin group.",
+                status_text("error", "This command can only be used in the admin group."),
             )
             return
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
-            await _reply_error(update, context, "⛔ This command is for admins only.")
+            await _reply_error(update, context, status_text("error", "This command is for admins only."))
             return
 
-        await update.effective_message.reply_text("📊 Loading stats...")
+        await update.effective_message.reply_text("Loading stats...")
 
         stats = await _gather_stats()
         live_members = await _get_live_community_member_count(context.bot)
         community_members = live_members if live_members is not None else stats["total_users"]
 
-        msg = (
-            f"📊 <b>HOSTFI Bot Stats</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"👥 <b>Community:</b> {community_members:,} members"
-            f" (+{stats['new_today']} today)\n"
-            f"✅ Verified: {stats['verified_users']:,}\n"
-            f"🚫 Banned: {stats['banned_users']:,}\n\n"
-            f"<b>Last 24 Hours:</b>\n"
-            f"🤖 AI queries: {stats['ai_queries']}\n"
-            f"🚫 Spam blocked: {stats['spam_blocked']}\n"
-            f"🚨 Scam blocked: {stats['scam_blocked']}\n"
-            f"⚠️ Warns: {stats['warns']} | Mutes: {stats['mutes']}"
-            f" | Bans: {stats['bans']}\n\n"
-            f"🎫 <b>Tickets:</b>\n"
-            f"Open: {stats['open_tickets']} | "
-            f"Claimed: {stats['claimed_tickets']} | "
-            f"Resolved today: {stats['resolved_today']}\n\n"
-            f"📢 Broadcasts: {stats['broadcasts']}\n"
-            f"🏆 Total XP awarded: {stats['total_xp']:,}"
+        msg = "\n".join(
+            [
+                title("HOSTFI Bot Stats", "📊"),
+                "",
+                field("Community", f"<b>{community_members:,}</b> members (+{stats['new_today']} today)"),
+                field("Verified", stats["verified_users"]),
+                field("Banned", stats["banned_users"]),
+                "",
+                title("Last 24 Hours"),
+                field("AI queries", stats["ai_queries"]),
+                field("Spam blocked", stats["spam_blocked"]),
+                field("Scam blocked", stats["scam_blocked"]),
+                field("Moderation", f"{stats['warns']} warns, {stats['mutes']} mutes, {stats['bans']} bans"),
+                "",
+                title("Tickets"),
+                field("Open", stats["open_tickets"]),
+                field("Claimed", stats["claimed_tickets"]),
+                field("Resolved today", stats["resolved_today"]),
+                "",
+                field("Broadcasts", stats["broadcasts"]),
+                field("Total XP awarded", f"{stats['total_xp']:,}"),
+            ]
         )
 
         await update.effective_message.reply_text(msg, parse_mode="HTML")
 
     except Exception as exc:
         logger.error("Error in stats_command: %s", exc)
-        await _reply_error(update, context, "⚠️ Failed to load stats. Please try again.")
+        await _reply_error(update, context, status_text("warning", "Failed to load stats. Please try again."))
 
 
 async def _gather_stats() -> dict:
@@ -260,12 +264,12 @@ async def lookup_command(
             await _reply_error(
                 update,
                 context,
-                "⛔ This command can only be used in the admin group.",
+                status_text("error", "This command can only be used in the admin group."),
             )
             return
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
-            await _reply_error(update, context, "⛔ This command is for admins only.")
+            await _reply_error(update, context, status_text("error", "This command is for admins only."))
             return
 
         text = update.effective_message.text or ""
@@ -275,7 +279,7 @@ async def lookup_command(
             await _reply_error(
                 update,
                 context,
-                "ℹ️ <b>Usage:</b>\n<code>/lookup 123456789</code>",
+                "<b>Usage</b>\n<code>/lookup 123456789</code>",
                 parse_mode="HTML",
             )
             return
@@ -283,7 +287,7 @@ async def lookup_command(
         try:
             target_id = int(parts[1])
         except ValueError:
-            await _reply_error(update, context, "❌ Invalid Telegram ID. Must be a number.")
+            await _reply_error(update, context, status_text("error", "Invalid Telegram ID. Must be a number."))
             return
 
         user_data = await _lookup_user(target_id)
@@ -292,15 +296,15 @@ async def lookup_command(
             await _reply_error(
                 update,
                 context,
-                f"❌ User <code>{target_id}</code> not found in database.",
+                status_text("error", f"User {target_id} not found in database."),
                 parse_mode="HTML",
             )
             return
 
         name = html.escape(user_data.get("first_name") or "N/A")
         username = html.escape(user_data.get("username") or "N/A")
-        verified = "✅ Yes" if user_data.get("is_verified") else "❌ No"
-        banned = "🚫 Yes" if user_data.get("is_banned") else "✅ No"
+        verified = "Yes" if user_data.get("is_verified") else "No"
+        banned = "Yes" if user_data.get("is_banned") else "No"
         warns = user_data.get("warn_count", 0)
         xp = user_data.get("xp_points", 0)
         join_date = user_data.get("join_date", "N/A")
@@ -309,27 +313,29 @@ async def lookup_command(
         # Get ticket count and referral count
         ticket_count, referral_count = await _user_extras(target_id)
 
-        msg = (
-            f"🔍 <b>User Lookup</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"🆔 <b>Telegram ID:</b> <code>{target_id}</code>\n"
-            f"👤 <b>Name:</b> {name}\n"
-            f"🏷️ <b>Username:</b> @{username}\n"
-            f"✅ <b>Verified:</b> {verified}\n"
-            f"🚫 <b>Banned:</b> {banned}\n"
-            f"⚠️ <b>Warnings:</b> {warns}/3\n"
-            f"⭐ <b>XP:</b> {xp:,}\n"
-            f"🎫 <b>Tickets:</b> {ticket_count}\n"
-            f"👥 <b>Referrals:</b> {referral_count}\n"
-            f"📅 <b>Joined:</b> {join_date}\n"
-            f"🕐 <b>Last Active:</b> {last_active}"
+        msg = "\n".join(
+            [
+                title("User Lookup", "🔍"),
+                "",
+                field("Telegram ID", f"<code>{target_id}</code>"),
+                field("Name", name),
+                field("Username", f"@{username}"),
+                field("Verified", verified),
+                field("Banned", banned),
+                field("Warnings", f"{warns}/3"),
+                field("XP", f"{xp:,}"),
+                field("Tickets", ticket_count),
+                field("Referrals", referral_count),
+                field("Joined", join_date),
+                field("Last active", last_active),
+            ]
         )
 
         await update.effective_message.reply_text(msg, parse_mode="HTML")
 
     except Exception as exc:
         logger.error("Error in lookup_command: %s", exc)
-        await _reply_error(update, context, "⚠️ Something went wrong. Please try again.")
+        await _reply_error(update, context, status_text("warning", "Something went wrong. Please try again."))
 
 
 async def _lookup_user(telegram_id: int) -> dict | None:
@@ -402,16 +408,16 @@ async def reindex_command(
             await _reply_error(
                 update,
                 context,
-                "⛔ This command can only be used in the admin group.",
+                status_text("error", "This command can only be used in the admin group."),
             )
             return
 
         if not await is_superadmin(update.effective_user.id):
-            await _reply_error(update, context, "⛔ This command is for the superadmin only.")
+            await _reply_error(update, context, status_text("error", "This command is for the superadmin only."))
             return
 
         status_msg = await update.effective_message.reply_text(
-            "🔄 Re-indexing knowledge base... This may take a moment."
+            "Re-indexing knowledge base. This may take a moment."
         )
 
         from rag.ingestion import run_ingestion
@@ -419,11 +425,11 @@ async def reindex_command(
         summary = await run_ingestion(clear_existing=True)
 
         await status_msg.edit_text(
-            f"✅ <b>Knowledge Base Re-indexed</b>\n\n"
-            f"📄 Files loaded: {summary['files_loaded']}\n"
-            f"🌐 URLs scraped: {summary['urls_scraped']}\n"
-            f"📦 Total chunks: {summary['total_chunks']}\n"
-            f"💾 Chunks stored: {summary['chunks_stored']}",
+            title("Knowledge Base Re-indexed", "✅")
+            + f"\n\n{field('Files loaded', summary['files_loaded'])}"
+            + f"\n{field('URLs scraped', summary['urls_scraped'])}"
+            + f"\n{field('Total chunks', summary['total_chunks'])}"
+            + f"\n{field('Chunks stored', summary['chunks_stored'])}",
             parse_mode="HTML",
         )
 
@@ -441,7 +447,7 @@ async def reindex_command(
 
     except Exception as exc:
         logger.error("Error in reindex_command: %s", exc)
-        await _reply_error(update, context, f"⚠️ Re-indexing failed: {html.escape(str(exc))}")
+        await _reply_error(update, context, status_text("warning", f"Re-indexing failed: {str(exc)}"))
 
 
 # ---------------------------------------------------------------------------
@@ -467,44 +473,44 @@ async def adminhelp_command(
             await _reply_error(
                 update,
                 context,
-                "⛔ This command can only be used in the admin group.",
+                status_text("error", "This command can only be used in the admin group."),
             )
             return
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
-            await _reply_error(update, context, "⛔ This command is for admins only.")
+            await _reply_error(update, context, status_text("error", "This command is for admins only."))
             return
 
-        help_text = (
-            "🛠️ <b>HOSTFI Bot — Admin Commands</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-            "<b>📊 Dashboard</b>\n"
-            "/stats — Bot and community statistics\n"
-            "/lookup &lt;id&gt; — Look up a user record\n"
-            "/adminhelp — This help menu\n\n"
-            "<b>👮 Moderation</b>\n"
-            "/warn &lt;reply|id&gt; [reason] — Warn a user (3 = auto-ban)\n"
-            "/mute &lt;reply|id&gt; [duration] [reason] — Mute a user\n"
-            "/unmute &lt;reply|id&gt; — Unmute a user\n"
-            "/ban &lt;reply|id&gt; [reason] — Ban a user\n"
-            "/unban &lt;id&gt; — Unban a user\n"
-            "/kick &lt;reply|id&gt; [reason] — Kick a user\n"
-            "/pin — Pin a replied message\n"
-            "/announce &lt;text&gt; — Send formatted announcement\n\n"
-            "<b>📢 Broadcast</b>\n"
-            "/broadcast — Start broadcast flow\n"
-            '/poll "Q?" "Opt1" "Opt2" — Create a poll\n\n'
-            "<b>🏆 XP Campaign</b>\n"
-            "/cycle start|finish — Manage cycles (superadmin)\n"
-            "/raid create &lt;url&gt; [hours] — Create raid\n"
-            "/award helpful [reason] — Award replied helpful message\n"
-            "/xp add|deduct|disqualify — Adjust campaign XP\n\n"
-            "<b>🎫 Tickets</b>\n"
-            "/tickets — View all active tickets\n"
-            "/reply &lt;HSTF-0001&gt; &lt;msg&gt; — Reply to ticket user\n"
-            "/close &lt;HSTF-0001&gt; — Resolve a ticket\n\n"
-            "<b>🔧 System</b>\n"
-            "/reindex — Re-ingest RAG knowledge base (superadmin)\n"
+        help_text = "\n".join(
+            [
+                title("Admin Commands", "🛠️"),
+                "",
+                title("Dashboard"),
+                bullet("<code>/stats</code> — Bot and community stats"),
+                bullet("<code>/lookup &lt;id&gt;</code> — User record"),
+                "",
+                title("Moderation"),
+                bullet("<code>/warn</code>, <code>/mute</code>, <code>/ban</code>, <code>/kick</code>"),
+                bullet("<code>/pin</code>, <code>/announce &lt;text&gt;</code>"),
+                "",
+                title("Broadcast"),
+                bullet("<code>/broadcast</code> — Broadcast flow"),
+                bullet('<code>/poll "Q?" "Opt1" "Opt2"</code> — Poll'),
+                "",
+                title("XP Campaign"),
+                bullet("<code>/cycle start|finish</code> — Manage cycles"),
+                bullet("<code>/raid create &lt;url&gt; [hours]</code> — Create raid"),
+                bullet("<code>/award helpful [reason]</code> — Award helpful message"),
+                bullet("<code>/xp add|deduct|disqualify</code> — Adjust XP"),
+                "",
+                title("Tickets"),
+                bullet("<code>/tickets</code> — Active tickets"),
+                bullet("<code>/reply &lt;HSTF-0001&gt; &lt;msg&gt;</code> — Reply"),
+                bullet("<code>/close &lt;HSTF-0001&gt;</code> — Resolve"),
+                "",
+                title("System"),
+                bullet("<code>/reindex</code> — Re-ingest RAG knowledge base"),
+            ]
         )
 
         await update.effective_message.reply_text(
@@ -533,20 +539,20 @@ async def build_daily_report(bot: Bot | None = None) -> str:
     live_members = await _get_live_community_member_count(bot)
     community_members = live_members if live_members is not None else stats["total_users"]
     today = datetime.now(timezone.utc).strftime("%B %d, %Y")
+    community_line = f"<b>{community_members:,}</b> members (+{stats['new_today']} today)"
+    moderation_line = f"{stats['warns']} warns, {stats['mutes']} mutes, {stats['bans']} bans"
+    ticket_line = f"{stats['open_tickets']} open, {stats['resolved_today']} resolved today"
+    total_xp = f"{stats['total_xp']:,}"
 
     return (
-        f"📊 <b>HOSTFI Bot Daily Report — {today}</b>\n"
-        f"━━━━━━━━━━━━━━━━━━\n\n"
-        f"👥 Community: <b>{community_members:,}</b> members"
-        f" (+{stats['new_today']} today)\n"
-        f"🤖 AI queries: {stats['ai_queries']}\n"
-        f"🚫 Spam blocked: {stats['spam_blocked']}\n"
-        f"🚨 Scam blocked: {stats['scam_blocked']}\n"
-        f"⚠️ Moderation: {stats['warns']} warns, {stats['mutes']} mutes,"
-        f" {stats['bans']} bans\n"
-        f"🎫 Tickets: {stats['open_tickets']} open,"
-        f" {stats['resolved_today']} resolved today\n"
-        f"📢 Broadcasts: {stats['broadcasts']}\n"
-        f"🏆 Total XP: {stats['total_xp']:,}\n\n"
-        f"Bot uptime: ✅ Running"
+        f"{title(f'HOSTFI Bot Daily Report — {today}', '📊')}\n\n"
+        f"{field('Community', community_line)}\n"
+        f"{field('AI queries', stats['ai_queries'])}\n"
+        f"{field('Spam blocked', stats['spam_blocked'])}\n"
+        f"{field('Scam blocked', stats['scam_blocked'])}\n"
+        f"{field('Moderation', moderation_line)}\n"
+        f"{field('Tickets', ticket_line)}\n"
+        f"{field('Broadcasts', stats['broadcasts'])}\n"
+        f"{field('Total XP', total_xp)}\n\n"
+        f"{field('Bot uptime', 'Running')}"
     )

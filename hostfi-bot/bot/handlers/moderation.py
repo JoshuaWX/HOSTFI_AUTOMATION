@@ -22,6 +22,8 @@ from bot.utils.formatter import (
     format_unban,
     format_unmute,
     format_warn,
+    status_text,
+    title,
 )
 from bot.utils.auto_delete import schedule_delete
 from bot.utils.permissions import is_admin
@@ -186,14 +188,14 @@ async def warn_command(
     """
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
-            "⛔ You don't have permission to use this command."
+            status_text("error", "You don't have permission to use this command.")
         )
         return
 
     if not await check_rate_limit(
         update.effective_user.id, "admin_cmd", 30, 60
     ):
-        await update.message.reply_text("⏳ Please slow down.")
+        await update.message.reply_text(status_text("warning", "Please slow down."))
         return
 
     result = await _extract_target_and_reason(update, context)
@@ -208,7 +210,7 @@ async def warn_command(
     target, reason = result
 
     if await is_admin(target.id, bot=context.bot):
-        await update.message.reply_text("⛔ Cannot warn an admin.")
+        await update.message.reply_text(status_text("error", "Cannot warn an admin."))
         return
 
     try:
@@ -269,7 +271,7 @@ async def warn_command(
     except Exception as exc:
         logger.error("Warn command failed: %s", exc)
         await update.message.reply_text(
-            "❌ An error occurred. Please try again."
+            status_text("error", "An error occurred. Please try again.")
         )
 
 
@@ -296,14 +298,14 @@ async def mute_command(
     """
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
-            "⛔ You don't have permission to use this command."
+            status_text("error", "You don't have permission to use this command.")
         )
         return
 
     if not await check_rate_limit(
         update.effective_user.id, "admin_cmd", 30, 60
     ):
-        await update.message.reply_text("⏳ Please slow down.")
+        await update.message.reply_text(status_text("warning", "Please slow down."))
         return
 
     # Parse arguments — two possible patterns
@@ -351,13 +353,13 @@ async def mute_command(
         return
 
     if await is_admin(target.id, bot=context.bot):
-        await update.message.reply_text("⛔ Cannot mute an admin.")
+        await update.message.reply_text(status_text("error", "Cannot mute an admin."))
         return
 
     parsed = _parse_duration(duration_str)
     if parsed is None:
         await update.message.reply_text(
-            "❌ Invalid duration. Use format: "
+            "Invalid duration. Use format: "
             "<code>30m</code>, <code>1h</code>, <code>2d</code>",
             parse_mode="HTML",
         )
@@ -398,7 +400,7 @@ async def mute_command(
     except Exception as exc:
         logger.error("Mute command failed: %s", exc)
         await update.message.reply_text(
-            "❌ An error occurred. Please try again."
+            status_text("error", "An error occurred. Please try again.")
         )
 
 
@@ -423,7 +425,7 @@ async def unmute_command(
     """
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
-            "⛔ You don't have permission to use this command."
+            status_text("error", "You don't have permission to use this command.")
         )
         return
 
@@ -467,7 +469,7 @@ async def unmute_command(
     except Exception as exc:
         logger.error("Unmute command failed: %s", exc)
         await update.message.reply_text(
-            "❌ An error occurred. Please try again."
+            status_text("error", "An error occurred. Please try again.")
         )
 
 
@@ -492,14 +494,14 @@ async def ban_command(
     """
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
-            "⛔ You don't have permission to use this command."
+            status_text("error", "You don't have permission to use this command.")
         )
         return
 
     if not await check_rate_limit(
         update.effective_user.id, "admin_cmd", 30, 60
     ):
-        await update.message.reply_text("⏳ Please slow down.")
+        await update.message.reply_text(status_text("warning", "Please slow down."))
         return
 
     result = await _extract_target_and_reason(update, context)
@@ -514,7 +516,7 @@ async def ban_command(
     target, reason = result
 
     if await is_admin(target.id, bot=context.bot):
-        await update.message.reply_text("⛔ Cannot ban an admin.")
+        await update.message.reply_text(status_text("error", "Cannot ban an admin."))
         return
 
     try:
@@ -549,7 +551,7 @@ async def ban_command(
     except Exception as exc:
         logger.error("Ban command failed: %s", exc)
         await update.message.reply_text(
-            "❌ An error occurred. Please try again."
+            status_text("error", "An error occurred. Please try again.")
         )
 
 
@@ -573,7 +575,7 @@ async def unban_command(
     """
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
-            "⛔ You don't have permission to use this command."
+            status_text("error", "You don't have permission to use this command.")
         )
         return
 
@@ -615,7 +617,7 @@ async def unban_command(
     except Exception as exc:
         logger.error("Unban command failed: %s", exc)
         await update.message.reply_text(
-            "❌ An error occurred. Please try again."
+            status_text("error", "An error occurred. Please try again.")
         )
 
 
@@ -642,14 +644,14 @@ async def kick_command(
     """
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
-            "⛔ You don't have permission to use this command."
+            status_text("error", "You don't have permission to use this command.")
         )
         return
 
     if not await check_rate_limit(
         update.effective_user.id, "admin_cmd", 30, 60
     ):
-        await update.message.reply_text("⏳ Please slow down.")
+        await update.message.reply_text(status_text("warning", "Please slow down."))
         return
 
     result = await _extract_target_and_reason(update, context)
@@ -664,7 +666,7 @@ async def kick_command(
     target, reason = result
 
     if await is_admin(target.id, bot=context.bot):
-        await update.message.reply_text("⛔ Cannot kick an admin.")
+        await update.message.reply_text(status_text("error", "Cannot kick an admin."))
         return
 
     try:
@@ -699,7 +701,7 @@ async def kick_command(
     except Exception as exc:
         logger.error("Kick command failed: %s", exc)
         await update.message.reply_text(
-            "❌ An error occurred. Please try again."
+            status_text("error", "An error occurred. Please try again.")
         )
 
 
@@ -722,7 +724,7 @@ async def pin_command(
     """
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
-            "⛔ You don't have permission to use this command."
+            status_text("error", "You don't have permission to use this command.")
         )
         return
 
@@ -744,7 +746,7 @@ async def pin_command(
             },
         )
 
-        msg = await update.message.reply_text("📌 Message pinned.")
+        msg = await update.message.reply_text(status_text("success", "Message pinned."))
         await schedule_delete(msg, context, 15)
         logger.info(
             "Message pinned by admin %s", update.effective_user.id
@@ -753,8 +755,7 @@ async def pin_command(
     except Exception as exc:
         logger.error("Pin command failed: %s", exc)
         await update.message.reply_text(
-            "❌ Could not pin the message. "
-            "Make sure the bot has pin permissions."
+            status_text("error", "Could not pin the message. Make sure the bot has pin permissions.")
         )
 
 
@@ -778,7 +779,7 @@ async def rules_command(
     if not await check_rate_limit(
         update.effective_user.id, "command", 10, 60
     ):
-        await update.message.reply_text("⏳ Please slow down.")
+        await update.message.reply_text(status_text("warning", "Please slow down."))
         return
 
     msg = await update.message.reply_text(
@@ -811,13 +812,13 @@ async def announce_command(
     from config import ADMIN_CHANNEL_ID as _ADMIN_CH
     if update.effective_chat and update.effective_chat.id != _ADMIN_CH:
         await update.message.reply_text(
-            "⛔ This command can only be used in the admin channel."
+            status_text("error", "This command can only be used in the admin channel.")
         )
         return
 
     if not await is_admin(update.effective_user.id, bot=context.bot):
         await update.message.reply_text(
-            "⛔ You don't have permission to use this command."
+            status_text("error", "You don't have permission to use this command.")
         )
         return
 
@@ -836,7 +837,7 @@ async def announce_command(
         for chat_id in COMMUNITY_GROUP_IDS:
             await context.bot.send_message(
                 chat_id=chat_id,
-                text=f"📢 <b>Announcement</b>\n\n{safe_text}",
+                text=f"{title('Announcement', '📢')}\n\n{safe_text}",
                 parse_mode="HTML",
             )
             sent += 1
@@ -848,7 +849,7 @@ async def announce_command(
             metadata={"text": text[:500]},
         )
 
-        await update.message.reply_text(f"✅ Announcement sent to {sent} community group(s).")
+        await update.message.reply_text(status_text("success", f"Announcement sent to {sent} community group(s)."))
         logger.info(
             "Announcement sent by admin %s", update.effective_user.id
         )
@@ -856,5 +857,5 @@ async def announce_command(
     except Exception as exc:
         logger.error("Announce command failed: %s", exc)
         await update.message.reply_text(
-            "❌ Failed to send announce. Please try again."
+            status_text("error", "Failed to send announce. Please try again.")
         )

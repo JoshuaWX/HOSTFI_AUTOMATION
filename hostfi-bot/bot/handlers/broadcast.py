@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update
 from telegram.ext import ContextTypes, ConversationHandler, filters
 
+from bot.utils.formatter import bullet, field, status_text, title
 from bot.utils.keyboards import confirm_broadcast_keyboard
 from bot.utils.permissions import is_admin
 from bot.utils.rate_limiter import check_rate_limit, get_redis
@@ -71,15 +72,22 @@ async def start_command(
         await get_or_create_user(user.id, user.username, user.first_name)
 
         await update.effective_message.reply_text(
-            "🎉 <b>Welcome to the HOSTFI Bot!</b>\n\n"
-            "I'm your all-in-one crypto community assistant.\n\n"
-            "<b>What I can do:</b>\n"
-            "• 🤖 /ask — AI-powered support\n"
-            "• 🎫 /support — Open a support ticket\n"
-            "• 🏆 /rank — Check your XP rank\n"
-            "• 🏅 /leaderboard — Top members\n\n"
-            "Use /campaign to see current XP campaign rules.\n"
-            "Use /invite to get your campaign invite link.",
+            "\n".join(
+                [
+                    title("HOSTFI Bot", "👋"),
+                    "",
+                    "Your crypto community assistant.",
+                    "",
+                    title("Core"),
+                    bullet("<code>/ask</code> — AI support"),
+                    bullet("<code>/support</code> — Open a ticket"),
+                    "",
+                    title("Campaign"),
+                    bullet("<code>/campaign</code> — XP panel"),
+                    bullet("<code>/rank</code> — Your rank"),
+                    bullet("<code>/leaderboard</code> — Top members"),
+                ]
+            ),
             parse_mode="HTML",
         )
 
@@ -110,7 +118,7 @@ async def rank_command(
 
         if not await check_rate_limit(user_id, "command", limit=10, window=60):
             await update.effective_message.reply_text(
-                "⏳ Too many requests. Please wait a moment."
+                status_text("warning", "Too many requests. Please wait a moment.")
             )
             return
 
@@ -133,26 +141,22 @@ async def rank_command(
         else:
             badge = "🌱 Newcomer"
 
-        lines = [
-            f"🏆 <b>{name}'s Profile</b>",
-            "━━━━━━━━━━━━━━━━━━",
-            "",
-        ]
+        lines = [title(f"{name}'s Profile", "🏆"), ""]
         if cycle:
-            lines.append(f"Cycle: <b>#{cycle.get('cycle_number')}</b>")
-        lines.append(f"⭐ <b>XP:</b> {xp:,} points")
-        lines.append(f"📊 <b>Rank:</b> #{rank} of {total}" if rank else "📊 <b>Rank:</b> Not ranked yet")
+            lines.append(field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>"))
+        lines.append(field("XP", f"<b>{xp:,}</b>"))
+        lines.append(field("Rank", f"<b>#{rank} of {total}</b>" if rank else "Not ranked yet"))
         lines.extend(
             [
-                f"🏅 <b>Badge:</b> {badge}",
+                field("Badge", badge),
                 "",
-                "<b>How to earn XP:</b>",
-                "• 🚀 50 XP — Approved X raids",
-                "• 👥 70 XP — Telegram invites after 48h",
-                "• ✍️ 80 XP — HostFi X posts (1/day)",
-                "• 💡 100 XP — Helpful approved contributions",
+                title("Earn XP"),
+                bullet("50 XP — approved X raids"),
+                bullet("70 XP — Telegram invites after 48h"),
+                bullet("80 XP — HostFi X posts, once daily"),
+                bullet("100 XP — approved helpful contributions"),
                 "",
-                "Get your invite link with /invite",
+                "Get your invite link with <code>/invite</code>.",
             ]
         )
         msg = "\n".join(lines)
@@ -162,7 +166,7 @@ async def rank_command(
     except Exception as exc:
         logger.error("Error in rank_command: %s", exc)
         await update.effective_message.reply_text(
-            "⚠️ Something went wrong. Please try again later."
+            status_text("warning", "Something went wrong. Please try again later.")
         )
 
 
@@ -189,7 +193,7 @@ async def leaderboard_command(
 
         if not await check_rate_limit(user_id, "command", limit=10, window=60):
             await update.effective_message.reply_text(
-                "⏳ Too many requests. Please wait a moment."
+                status_text("warning", "Too many requests. Please wait a moment.")
             )
             return
 
@@ -197,21 +201,20 @@ async def leaderboard_command(
 
         if not top_users:
             await update.effective_message.reply_text(
-                "📊 No campaign leaderboard data yet. Earn XP through raids, invites, posts, and approved helpful contributions."
+                status_text("info", "No campaign leaderboard data yet. Earn XP through raids, invites, posts, and approved helpful contributions.")
             )
             return
 
-        medals = ["🥇", "🥈", "🥉"]
-        lines: list[str] = ["🏅 <b>XP Leaderboard — Top 10</b>\n━━━━━━━━━━━━━━━━━━"]
+        lines: list[str] = [title("XP Leaderboard", "🏅"), ""]
 
         for i, user in enumerate(top_users):
-            prefix = medals[i] if i < 3 else f"  {i + 1}."
+            prefix = f"{i + 1}."
             name = user.get("first_name") or user.get("username") or "User"
             safe_name = html.escape(name)
             xp = user.get("xp", 0)
-            lines.append(f"\n{prefix} <b>{safe_name}</b> — {xp:,} XP")
+            lines.append(f"{prefix} <b>{safe_name}</b> — {xp:,} XP")
 
-        lines.append("\n━━━━━━━━━━━━━━━━━━")
+        lines.append("")
         lines.append("Campaign ties are ranked by earliest approved XP event.")
 
         await update.effective_message.reply_text(
@@ -221,7 +224,7 @@ async def leaderboard_command(
     except Exception as exc:
         logger.error("Error in leaderboard_command: %s", exc)
         await update.effective_message.reply_text(
-            "⚠️ Something went wrong. Please try again later."
+            status_text("warning", "Something went wrong. Please try again later.")
         )
 
 
@@ -252,21 +255,21 @@ async def broadcast_command(
         from config import ADMIN_CHANNEL_ID as _ADMIN_CH
         if update.effective_chat and update.effective_chat.id != _ADMIN_CH:
             await update.effective_message.reply_text(
-                "⛔ This command can only be used in the admin channel."
+                status_text("error", "This command can only be used in the admin channel.")
             )
             return ConversationHandler.END
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
-                "⛔ This command is for admins only."
+                status_text("error", "This command is for admins only.")
             )
             return ConversationHandler.END
 
         await update.effective_message.reply_text(
-            "📢 <b>Broadcast Composer</b>\n\n"
+            f"{title('Broadcast Composer', '📢')}\n\n"
             "Send your announcement message now.\n"
             "Supported: <b>text, photo, or video</b> with optional caption.\n\n"
-            "Send /cancel to abort.",
+            "Send <code>/cancel</code> to abort.",
             parse_mode="HTML",
         )
         return BROADCAST_CONTENT
@@ -326,23 +329,20 @@ async def broadcast_receive_content(
             broadcast_data["text"] = msg.text
         else:
             await msg.reply_text(
-                "❌ Unsupported content type. Please send text, photo, or video."
+                status_text("error", "Unsupported content type. Please send text, photo, or video.")
             )
             return ConversationHandler.END
 
         _pending_broadcasts[broadcast_id] = broadcast_data
 
         # Show preview
-        preview_header = (
-            "📢 <b>Broadcast Preview</b>\n"
-            "━━━━━━━━━━━━━━━━━━\n\n"
-        )
+        preview_header = f"{title('Broadcast Preview', '📢')}\n\n"
+        confirm_text = "\n\nConfirm to send to the community group."
 
         if broadcast_data["type"] == "text":
             preview = preview_header + (broadcast_data["text"] or "")
             await msg.reply_text(
-                preview + "\n\n━━━━━━━━━━━━━━━━━━\n"
-                "✅ Confirm to send to the community group.",
+                preview + confirm_text,
                 parse_mode="HTML",
                 reply_markup=confirm_broadcast_keyboard(broadcast_id),
             )
@@ -352,8 +352,7 @@ async def broadcast_receive_content(
                 caption=(
                     preview_header
                     + (broadcast_data["caption"] or "")
-                    + "\n\n━━━━━━━━━━━━━━━━━━\n"
-                    "✅ Confirm to send to the community group."
+                    + confirm_text
                 ),
                 parse_mode="HTML",
                 reply_markup=confirm_broadcast_keyboard(broadcast_id),
@@ -364,8 +363,7 @@ async def broadcast_receive_content(
                 caption=(
                     preview_header
                     + (broadcast_data["caption"] or "")
-                    + "\n\n━━━━━━━━━━━━━━━━━━\n"
-                    "✅ Confirm to send to the community group."
+                    + confirm_text
                 ),
                 parse_mode="HTML",
                 reply_markup=confirm_broadcast_keyboard(broadcast_id),
@@ -376,7 +374,7 @@ async def broadcast_receive_content(
     except Exception as exc:
         logger.error("Error in broadcast_receive_content: %s", exc)
         await update.effective_message.reply_text(
-            "⚠️ Something went wrong. Please try /broadcast again."
+            status_text("warning", "Something went wrong. Please try /broadcast again.")
         )
         return ConversationHandler.END
 
@@ -403,7 +401,7 @@ async def broadcast_confirm_callback(
         return
 
     if not await is_admin(query.from_user.id, bot=context.bot):
-        await query.answer("⛔ Admins only.", show_alert=True)
+        await query.answer("Admins only.", show_alert=True)
         return
 
     parts = query.data.split("_")
@@ -417,12 +415,12 @@ async def broadcast_confirm_callback(
     broadcast_data = _pending_broadcasts.pop(broadcast_id, None)
 
     if broadcast_data is None:
-        await query.answer("❌ Broadcast expired or not found.", show_alert=True)
+        await query.answer("Broadcast expired or not found.", show_alert=True)
         return
 
     if action == "cancel":
         await query.answer("Broadcast cancelled.")
-        await query.edit_message_text("❌ Broadcast cancelled.")
+        await query.edit_message_text(status_text("info", "Broadcast cancelled."))
         logger.info(
             "Broadcast %s cancelled by admin %s",
             broadcast_id,
@@ -431,7 +429,7 @@ async def broadcast_confirm_callback(
         return
 
     # --- Send broadcast to community group ---
-    await query.answer("📨 Sending broadcast...")
+    await query.answer("Sending broadcast...")
 
     try:
         btype = broadcast_data["type"]
@@ -464,7 +462,7 @@ async def broadcast_confirm_callback(
             sent = 0
 
         await query.edit_message_text(
-            f"✅ Broadcast sent to {sent} community group(s)!"
+            status_text("success", f"Broadcast sent to {sent} community group(s).")
         )
 
         # Log the broadcast
@@ -488,7 +486,7 @@ async def broadcast_confirm_callback(
     except Exception as exc:
         logger.error("Broadcast %s send failed: %s", broadcast_id, exc)
         await query.edit_message_text(
-            f"⚠️ Broadcast failed: {html.escape(str(exc))}"
+            status_text("warning", f"Broadcast failed: {html.escape(str(exc))}")
         )
 
 
@@ -511,7 +509,7 @@ async def broadcast_cancel(
         ConversationHandler.END
     """
     if update.effective_message:
-        await update.effective_message.reply_text("❌ Broadcast cancelled.")
+        await update.effective_message.reply_text(status_text("info", "Broadcast cancelled."))
     return ConversationHandler.END
 
 
@@ -539,7 +537,7 @@ async def poll_command(
 
         if not await is_admin(update.effective_user.id, bot=context.bot):
             await update.effective_message.reply_text(
-                "⛔ This command is for admins only."
+                status_text("error", "This command is for admins only.")
             )
             return
 
@@ -550,7 +548,7 @@ async def poll_command(
 
         if not poll_text:
             await update.effective_message.reply_text(
-                'ℹ️ <b>Usage:</b>\n'
+                '<b>Usage</b>\n'
                 '<code>/poll "Question?" "Option 1" "Option 2" "Option 3"</code>\n\n'
                 "Minimum 2 options, maximum 10.",
                 parse_mode="HTML",
@@ -562,7 +560,7 @@ async def poll_command(
 
         if len(parts) < 3:
             await update.effective_message.reply_text(
-                "❌ Please provide a question and at least 2 options, all in quotes.\n\n"
+                "Please provide a question and at least 2 options, all in quotes.\n\n"
                 '<code>/poll "Question?" "Option 1" "Option 2"</code>',
                 parse_mode="HTML",
             )
@@ -570,7 +568,7 @@ async def poll_command(
 
         if len(parts) > 11:
             await update.effective_message.reply_text(
-                "❌ Maximum 10 options allowed."
+                status_text("error", "Maximum 10 options allowed.")
             )
             return
 
@@ -589,9 +587,10 @@ async def poll_command(
             poll_message_ids.append({"chat_id": chat_id, "message_id": poll_msg.message_id})
 
         await update.effective_message.reply_text(
-            f"✅ Poll created in {len(poll_message_ids)} community group(s)!\n\n"
-            f"📊 <b>{html.escape(question)}</b>\n"
-            f"Options: {len(options)}",
+            title("Poll Created", "✅")
+            + f"\n\n{field('Groups', len(poll_message_ids))}"
+            + f"\n{field('Question', html.escape(question))}"
+            + f"\n{field('Options', len(options))}",
             parse_mode="HTML",
         )
 
@@ -615,7 +614,7 @@ async def poll_command(
     except Exception as exc:
         logger.error("Error in poll_command: %s", exc)
         await update.effective_message.reply_text(
-            "⚠️ Something went wrong. Please try again."
+            status_text("warning", "Something went wrong. Please try again.")
         )
 
 
@@ -633,28 +632,23 @@ async def build_leaderboard_message() -> str:
     """
     top_users = await get_campaign_leaderboard(10)
 
-    lines: list[str] = [
-        "🏅 <b>Weekly XP Leaderboard</b>",
-        "━━━━━━━━━━━━━━━━━━",
-        "",
-        "Top community members this week:",
-    ]
+    lines: list[str] = [title("Weekly XP Leaderboard", "🏅"), "", "Top community members this week:"]
 
     if not top_users:
-        lines.append("\nNo data yet — complete raids, invite members, post about HostFi, or earn helpful contribution awards.")
+        lines.append("")
+        lines.append("No data yet. Complete raids, invite members, post about HostFi, or earn helpful contribution awards.")
     else:
-        medals = ["🥇", "🥈", "🥉"]
         for i, user in enumerate(top_users):
-            prefix = medals[i] if i < 3 else f"  {i + 1}."
+            prefix = f"{i + 1}."
             name = user.get("first_name") or user.get("username") or "User"
             safe_name = html.escape(name)
             xp = user.get("xp", 0)
-            lines.append(f"\n{prefix} <b>{safe_name}</b> — {xp:,} XP")
+            lines.append(f"{prefix} <b>{safe_name}</b> — {xp:,} XP")
 
-    lines.append("\n━━━━━━━━━━━━━━━━━━")
+    lines.append("")
     lines.append(
         "Earn XP: raids, retained invites, HostFi X posts, and helpful contributions\n"
-        "📲 Trade on <b>HostFi</b> — https://hostfi.io"
+        "Trade on <b>HostFi</b>: https://hostfi.io"
     )
 
     return "\n".join(lines)

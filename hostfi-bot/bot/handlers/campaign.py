@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from telegram import LinkPreviewOptions, Message, Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
+from bot.utils.formatter import bullet, field, status_text, title
 from bot.utils.keyboards import (
     campaign_cancel_keyboard,
     campaign_home_keyboard,
@@ -89,16 +90,16 @@ def _display_user(row: dict) -> str:
 def _campaign_missing() -> str:
     """Message used when no campaign cycle is active."""
     return (
-        "⚠️ No XP campaign cycle is active right now.\n\n"
-        "A superadmin must start one with <code>/cycle start</code>."
+        title("No Active Campaign", "⚠️")
+        + "\n\nA superadmin can start one with <code>/cycle start</code>."
     )
 
 
 def _x_missing() -> str:
     """Message used when X API is not configured."""
     return (
-        "⚠️ X API verification is not configured yet.\n\n"
-        "Set <code>X_BEARER_TOKEN</code> before using X-based XP commands."
+        title("X API Not Configured", "⚠️")
+        + "\n\nSet <code>X_BEARER_TOKEN</code> before using X-based XP commands."
     )
 
 
@@ -131,15 +132,20 @@ def _campaign_home_text(cycle: dict) -> str:
     end_at = _parse_iso(cycle.get("end_at"))
     ends = end_at.strftime("%Y-%m-%d %H:%M UTC") if end_at else "Manual finish"
     return (
-        f"🏆 <b>HostFi XP Campaign — Cycle #{cycle.get('cycle_number')}</b>\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        f"Ends: <b>{ends}</b>\n\n"
-        "<b>Earn XP:</b>\n"
-        f"• Raids on X: <b>{XP_RAID} XP</b>\n"
-        f"• Telegram invites after 48h: <b>{XP_INVITE} XP</b>\n"
-        f"• Helpful contributions: <b>{XP_HELPFUL} XP</b>\n"
-        f"• Approved HostFi X posts: <b>{XP_X_POST} XP</b> (1/day)\n\n"
-        "Use the buttons below to manage your campaign activity."
+        title(f"XP Campaign · Cycle #{cycle.get('cycle_number')}", "🏆")
+        + "\n\n"
+        + field("Ends", f"<b>{ends}</b>")
+        + "\n\n"
+        + title("Earn XP")
+        + "\n"
+        + bullet(f"Raids on X — <b>{XP_RAID} XP</b>")
+        + "\n"
+        + bullet(f"Telegram invites after 48h — <b>{XP_INVITE} XP</b>")
+        + "\n"
+        + bullet(f"Helpful contributions — <b>{XP_HELPFUL} XP</b>")
+        + "\n"
+        + bullet(f"HostFi X posts — <b>{XP_X_POST} XP</b> once daily")
+        + "\n\nUse the buttons below to manage your campaign activity."
     )
 
 
@@ -165,10 +171,15 @@ async def _send_xp_status(message: Message, user_id: int) -> None:
 
     rank_text = f"#{rank} of {total}" if rank else "Not ranked yet"
     await message.reply_text(
-        f"⭐ <b>Your Campaign XP</b>\n\n"
-        f"Cycle: <b>#{cycle.get('cycle_number')}</b>\n"
-        f"XP: <b>{xp:,}</b>\n"
-        f"Rank: <b>{rank_text}</b>",
+        "\n".join(
+            [
+                title("Your Campaign XP", "⭐"),
+                "",
+                field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>"),
+                field("XP", f"<b>{xp:,}</b>"),
+                field("Rank", f"<b>{rank_text}</b>"),
+            ]
+        ),
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
@@ -179,17 +190,15 @@ async def _send_campaign_leaderboard(message: Message) -> None:
     top_users = await get_campaign_leaderboard(10)
     if not top_users:
         await message.reply_text(
-            "📊 No campaign leaderboard data yet.",
+            status_text("info", "No campaign leaderboard data yet."),
             reply_markup=campaign_home_keyboard(),
         )
         return
 
-    lines = ["🏅 <b>XP Leaderboard — Top 10</b>", "━━━━━━━━━━━━━━━━━━"]
-    medals = ["🥇", "🥈", "🥉"]
+    lines = [title("XP Leaderboard", "🏅"), ""]
     for index, row in enumerate(top_users, 1):
-        prefix = medals[index - 1] if index <= 3 else f"{index}."
-        lines.append(f"\n{prefix} <b>{_display_user(row)}</b> — {row.get('xp', 0):,} XP")
-    lines.append("\n━━━━━━━━━━━━━━━━━━")
+        lines.append(f"{index}. <b>{_display_user(row)}</b> — {row.get('xp', 0):,} XP")
+    lines.append("")
     lines.append("Ties are ranked by earliest approved XP event.")
     await message.reply_text(
         "\n".join(lines),
@@ -224,7 +233,7 @@ async def _start_xlink_for_handle(
     clean_username = username.lstrip("@").strip()
     if not clean_username or len(clean_username) > 15:
         await update.effective_message.reply_text(
-            "❌ Please send a valid X handle, like <code>@hostfi_app</code>.",
+            status_text("error", "Send a valid X handle, like @hostfi_app."),
             parse_mode="HTML",
             reply_markup=campaign_cancel_keyboard(),
         )
@@ -233,14 +242,20 @@ async def _start_xlink_for_handle(
     code = f"HOSTFI-{secrets.token_hex(3).upper()}"
     record = await create_x_verification(user_id, clean_username, code)
     if not record:
-        await update.effective_message.reply_text("❌ Could not start X verification. Try again.")
+        await update.effective_message.reply_text(status_text("error", "Could not start X verification. Try again."))
         return False
 
     await update.effective_message.reply_text(
-        f"🔗 <b>X Verification Started</b>\n\n"
-        f"Post this code from <b>@{html.escape(clean_username)}</b> on X:\n"
-        f"<code>{code}</code>\n\n"
-        "After posting it, tap <b>I Posted The Code</b>.",
+        "\n".join(
+            [
+                title("X Verification", "🔗"),
+                "",
+                field("Account", f"<b>@{html.escape(clean_username)}</b>"),
+                field("Code", f"<code>{code}</code>"),
+                "",
+                "Post the code on X, then tap <b>Posted Code</b>.",
+            ]
+        ),
         parse_mode="HTML",
         reply_markup=campaign_xverify_keyboard(),
     )
@@ -259,7 +274,7 @@ async def _verify_x_post_url(update: Update, context: ContextTypes.DEFAULT_TYPE,
     account = await get_x_account(user_id)
     if not account or account.get("status") != "pending":
         await update.effective_message.reply_text(
-            "⚠️ Start first with <code>/xlink @handle</code> or the Link X button.",
+            status_text("warning", "Start by linking your X handle first."),
             parse_mode="HTML",
         )
         return False
@@ -267,7 +282,7 @@ async def _verify_x_post_url(update: Update, context: ContextTypes.DEFAULT_TYPE,
     parsed = parse_x_post_url(url)
     if not parsed:
         await update.effective_message.reply_text(
-            "❌ Send a valid X verification post URL.",
+            status_text("error", "Send a valid X verification post URL."),
             reply_markup=campaign_cancel_keyboard(),
         )
         return False
@@ -279,25 +294,25 @@ async def _verify_x_post_url(update: Update, context: ContextTypes.DEFAULT_TYPE,
         return False
     except Exception as exc:
         logger.error("X verify fetch failed: %s", exc)
-        await update.effective_message.reply_text("❌ Could not verify that X post. Try again later.")
+        await update.effective_message.reply_text(status_text("error", "Could not verify that X post. Try again later."))
         return False
 
     expected_user = str(account.get("username") or "").lower().lstrip("@")
     expected_code = str(account.get("verification_code") or "")
     if post.username != expected_user or expected_code not in post.text:
         await update.effective_message.reply_text(
-            "❌ Verification failed. The post must come from your linked handle and include the code.",
+            status_text("error", "Verification failed. The post must come from your linked handle and include the code."),
             reply_markup=campaign_cancel_keyboard(),
         )
         return False
 
     verified = await verify_x_account(user_id, post.author_id, post.username, post.post_id)
     if not verified:
-        await update.effective_message.reply_text("❌ Could not save X verification. Try again.")
+        await update.effective_message.reply_text(status_text("error", "Could not save X verification. Try again."))
         return False
 
     await update.effective_message.reply_text(
-        f"✅ X account linked: <b>@{html.escape(post.username)}</b>",
+        title("X Account Linked", "✅") + f"\n\n{field('Account', f'<b>@{html.escape(post.username)}</b>')}",
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
@@ -320,29 +335,29 @@ async def _submit_raid_proof_url(
 
     raid = await get_raid(raid_id)
     if not raid or raid.get("status") != "active":
-        await update.effective_message.reply_text("❌ Raid not found or no longer active.")
+        await update.effective_message.reply_text(status_text("error", "Raid not found or no longer active."))
         return False
 
     cycle = await get_active_cycle()
     if not cycle or int(cycle["id"]) != int(raid["cycle_id"]):
-        await update.effective_message.reply_text("❌ This raid belongs to a finished campaign cycle.")
+        await update.effective_message.reply_text(status_text("error", "This raid belongs to a finished campaign cycle."))
         return False
     if await is_disqualified(user_id, int(raid["cycle_id"])):
-        await update.effective_message.reply_text("⛔ You are disqualified from the current campaign cycle.")
+        await update.effective_message.reply_text(status_text("warning", "You are disqualified from the current campaign cycle."))
         return False
 
     deadline = _parse_iso(raid.get("deadline_at"))
     if deadline and _utc_now() > deadline:
-        await update.effective_message.reply_text("⏰ This raid has expired.")
+        await update.effective_message.reply_text(status_text("warning", "This raid has expired."))
         return False
     if await has_raid_submission(raid_id, user_id):
-        await update.effective_message.reply_text("⚠️ You already submitted proof for this raid.")
+        await update.effective_message.reply_text(status_text("warning", "You already submitted proof for this raid."))
         return False
 
     account = await get_x_account(user_id)
     if not account or account.get("status") != "verified":
         await update.effective_message.reply_text(
-            "⚠️ Link your X account first with the Link X button.",
+            status_text("warning", "Link your X account first."),
             parse_mode="HTML",
             reply_markup=campaign_home_keyboard(),
         )
@@ -351,7 +366,7 @@ async def _submit_raid_proof_url(
     parsed = parse_x_post_url(proof_url)
     if not parsed:
         await update.effective_message.reply_text(
-            "❌ Send a valid X proof URL.",
+            status_text("error", "Send a valid X proof URL."),
             reply_markup=campaign_cancel_keyboard(),
         )
         return False
@@ -360,17 +375,17 @@ async def _submit_raid_proof_url(
         post = await fetch_post(parsed[1], proof_url)
     except Exception as exc:
         logger.error("Raid proof fetch failed: %s", exc)
-        await update.effective_message.reply_text("❌ Could not verify that X proof.")
+        await update.effective_message.reply_text(status_text("error", "Could not verify that X proof."))
         return False
 
     if post.author_id != str(account.get("x_user_id")):
-        await update.effective_message.reply_text("❌ Proof must come from your linked X account.")
+        await update.effective_message.reply_text(status_text("error", "Proof must come from your linked X account."))
         return False
     if not is_reply_or_quote_to(post, str(raid["target_post_id"]), str(raid["target_url"])):
-        await update.effective_message.reply_text("❌ Proof must be a reply/quote/engagement on the approved raid post.")
+        await update.effective_message.reply_text(status_text("error", "Proof must reply to or quote the approved raid post."))
         return False
     if not is_meaningful_x_text(post.text):
-        await update.effective_message.reply_text("❌ Low-effort raid text does not qualify for XP.")
+        await update.effective_message.reply_text(status_text("error", "Low-effort raid text does not qualify for XP."))
         return False
 
     submission = await record_raid_submission(
@@ -383,7 +398,7 @@ async def _submit_raid_proof_url(
         {"text": post.text[:500]},
     )
     if not submission:
-        await update.effective_message.reply_text("❌ Could not record your raid proof.")
+        await update.effective_message.reply_text(status_text("error", "Could not record your raid proof."))
         return False
 
     event = await award_xp(
@@ -397,11 +412,11 @@ async def _submit_raid_proof_url(
         cycle_id=raid["cycle_id"],
     )
     if not event:
-        await update.effective_message.reply_text("❌ Could not award XP. Is the campaign active?")
+        await update.effective_message.reply_text(status_text("error", "Could not award XP. Check that the campaign is active."))
         return False
 
     await update.effective_message.reply_text(
-        f"✅ Raid approved automatically. You earned <b>{XP_RAID} XP</b>!",
+        title("Raid Approved", "✅") + f"\n\n{field('XP earned', f'<b>{XP_RAID}</b>')}",
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
@@ -422,13 +437,13 @@ async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
         return False
     if await is_disqualified(user_id, int(cycle["id"])):
-        await update.effective_message.reply_text("⛔ You are disqualified from the current campaign cycle.")
+        await update.effective_message.reply_text(status_text("warning", "You are disqualified from the current campaign cycle."))
         return False
 
     account = await get_x_account(user_id)
     if not account or account.get("status") != "verified":
         await update.effective_message.reply_text(
-            "⚠️ Link your X account first with the Link X button.",
+            status_text("warning", "Link your X account first."),
             parse_mode="HTML",
             reply_markup=campaign_home_keyboard(),
         )
@@ -437,33 +452,33 @@ async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     parsed = parse_x_post_url(url)
     if not parsed:
         await update.effective_message.reply_text(
-            "❌ Send a valid X post URL.",
+            status_text("error", "Send a valid X post URL."),
             reply_markup=campaign_cancel_keyboard(),
         )
         return False
 
     day = _utc_now().date().isoformat()
     if await has_daily_x_post(user_id, cycle["id"], day):
-        await update.effective_message.reply_text("⚠️ You already earned personal X post XP today.")
+        await update.effective_message.reply_text(status_text("warning", "You already earned personal X post XP today."))
         return False
 
     try:
         post = await fetch_post(parsed[1], url)
     except Exception as exc:
         logger.error("X post fetch failed: %s", exc)
-        await update.effective_message.reply_text("❌ Could not verify that X post.")
+        await update.effective_message.reply_text(status_text("error", "Could not verify that X post."))
         return False
 
     if post.author_id != str(account.get("x_user_id")):
-        await update.effective_message.reply_text("❌ Post must come from your linked X account.")
+        await update.effective_message.reply_text(status_text("error", "Post must come from your linked X account."))
         return False
     if not mentions_hostfi(post.text) or not is_meaningful_x_text(post.text):
-        await update.effective_message.reply_text("❌ Post must be meaningful and clearly about HostFi.")
+        await update.effective_message.reply_text(status_text("error", "Post must be meaningful and clearly about HostFi."))
         return False
     if post.created_at:
         cycle_start = _parse_iso(cycle.get("start_at"))
         if cycle_start and post.created_at < cycle_start:
-            await update.effective_message.reply_text("❌ This post was made before the current campaign cycle.")
+            await update.effective_message.reply_text(status_text("error", "This post was made before the current campaign cycle."))
             return False
 
     submission = await record_x_post_submission(
@@ -476,7 +491,7 @@ async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         {"text": post.text[:500]},
     )
     if not submission:
-        await update.effective_message.reply_text("❌ Could not record this X post.")
+        await update.effective_message.reply_text(status_text("error", "Could not record this X post."))
         return False
 
     event = await award_xp(
@@ -489,11 +504,11 @@ async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         metadata={"day": day},
     )
     if not event:
-        await update.effective_message.reply_text("❌ Could not award XP.")
+        await update.effective_message.reply_text(status_text("error", "Could not award XP."))
         return False
 
     await update.effective_message.reply_text(
-        f"✅ HostFi X post approved. You earned <b>{XP_X_POST} XP</b>!",
+        title("X Post Approved", "✅") + f"\n\n{field('XP earned', f'<b>{XP_X_POST}</b>')}",
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
@@ -536,7 +551,7 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         return
 
     if not await check_rate_limit(user_id, "campaign_invite", 5, 300):
-        await update.effective_message.reply_text("⏳ Please wait before requesting another invite link.")
+        await update.effective_message.reply_text(status_text("warning", "Please wait before requesting another invite link."))
         return
 
     cycle = await get_active_cycle()
@@ -546,7 +561,7 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
     target_chat_id = _target_community_group_id(update)
     if not target_chat_id:
-        await update.effective_message.reply_text("❌ No community group is configured.")
+        await update.effective_message.reply_text(status_text("error", "No community group is configured."))
         return
 
     existing = await get_or_create_invite_link_record(cycle["id"], user_id, chat_id=target_chat_id)
@@ -562,7 +577,7 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         except Exception as exc:
             logger.error("Failed to create campaign invite link: %s", exc)
             await update.effective_message.reply_text(
-                "❌ Could not create your invite link. Make sure the bot can invite users."
+                status_text("error", "Could not create your invite link. Make sure the bot can invite users.")
             )
             return
         record = await get_or_create_invite_link_record(
@@ -574,9 +589,10 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         link = record["invite_link"] if record else invite.invite_link
 
     await update.effective_message.reply_text(
-        f"👥 <b>Your Campaign Invite Link</b>\n\n"
+        f"{title('Campaign Invite Link', '👥')}\n\n"
         f"<code>{html.escape(link)}</code>\n\n"
-        f"You earn <b>{XP_INVITE} XP</b> when an invited user stays in the group for 48 hours.",
+        f"{field('Reward', f'<b>{XP_INVITE} XP</b>')}\n"
+        "XP is awarded after the invited user stays in the group for 48 hours.",
         parse_mode="HTML",
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
@@ -614,16 +630,17 @@ async def raids_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     raids = await get_active_raids()
     if not raids:
-        await update.effective_message.reply_text("📭 No active raids right now.")
+        await update.effective_message.reply_text(status_text("info", "No active raids right now."))
         return
 
-    await update.effective_message.reply_text("🚀 <b>Active HostFi Raids</b>", parse_mode="HTML")
+    await update.effective_message.reply_text(title("Active HostFi Raids", "🚀"), parse_mode="HTML")
     for raid in raids:
         deadline = _parse_iso(raid.get("deadline_at"))
         deadline_text = deadline.strftime("%Y-%m-%d %H:%M UTC") if deadline else "No deadline"
         text = (
-            f"<b>Raid #{raid['id']}</b> — {XP_RAID} XP\n"
-            f"Deadline: {deadline_text}\n"
+            f"<b>Raid #{raid['id']}</b>\n"
+            f"{field('Reward', f'<b>{XP_RAID} XP</b>')}\n"
+            f"{field('Deadline', html.escape(deadline_text))}\n"
             f"{html.escape(raid.get('target_url') or '')}\n"
             "Use the buttons below to open the post or submit proof."
         )
@@ -653,13 +670,13 @@ async def raid_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     elif subcommand == "submit":
         await _raid_submit(update, context)
     else:
-        await update.effective_message.reply_text("❌ Unknown raid command. Use create or submit.")
+        await update.effective_message.reply_text(status_text("error", "Unknown raid command. Use create or submit."))
 
 
 async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Create an approved raid target."""
     if not await is_admin(update.effective_user.id, bot=context.bot):
-        await update.effective_message.reply_text("⛔ Admins only.")
+        await update.effective_message.reply_text(status_text("error", "Admins only."))
         return
     if len(context.args) < 2:
         await update.effective_message.reply_text(
@@ -674,7 +691,7 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
     parsed = parse_x_post_url(context.args[1])
     if not parsed:
-        await update.effective_message.reply_text("❌ Send a valid X post URL.")
+        await update.effective_message.reply_text(status_text("error", "Send a valid X post URL."))
         return
 
     try:
@@ -682,7 +699,7 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         if deadline_hours < 1 or deadline_hours > 336:
             raise ValueError
     except ValueError:
-        await update.effective_message.reply_text("❌ Deadline must be between 1 and 336 hours.")
+        await update.effective_message.reply_text(status_text("error", "Deadline must be between 1 and 336 hours."))
         return
 
     raid = await create_raid(
@@ -693,15 +710,15 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         deadline_at=_utc_now() + timedelta(hours=deadline_hours),
     )
     if not raid:
-        await update.effective_message.reply_text("❌ Could not create raid.")
+        await update.effective_message.reply_text(status_text("error", "Could not create raid."))
         return
 
+    raid_title = title(f"New HostFi Raid #{raid['id']}", "🚀")
     text = (
-        f"🚀 <b>New HostFi Raid — #{raid['id']}</b>\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        f"Engage with this approved HostFi post on X:\n{html.escape(context.args[1])}\n\n"
-        f"Reward: <b>{XP_RAID} XP</b>\n"
-        f"Deadline: <b>{deadline_hours} hours</b>\n\n"
+        f"{raid_title}\n\n"
+        f"{html.escape(context.args[1])}\n\n"
+        f"{field('Reward', f'<b>{XP_RAID} XP</b>')}\n"
+        f"{field('Deadline', f'<b>{deadline_hours} hours</b>')}\n\n"
         "Use the buttons below to participate."
     )
     await _send_to_community_groups(
@@ -711,7 +728,7 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         reply_markup=campaign_raid_keyboard(raid["id"], context.args[1]),
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
-    await update.effective_message.reply_text(f"✅ Raid #{raid['id']} created and posted.")
+    await update.effective_message.reply_text(status_text("success", f"Raid #{raid['id']} created and posted."))
     await log_action(
         "raid_created",
         update.effective_user.id,
@@ -730,7 +747,7 @@ async def _raid_submit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     try:
         raid_id = int(context.args[1])
     except ValueError:
-        await update.effective_message.reply_text("❌ Raid ID must be a number.")
+        await update.effective_message.reply_text(status_text("error", "Raid ID must be a number."))
         return
     await _submit_raid_proof_url(update, context, raid_id, context.args[2])
 
@@ -755,10 +772,10 @@ async def cycle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not update.effective_user or not update.effective_message:
         return
     if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
-        await update.effective_message.reply_text("⛔ Use this in the admin channel.")
+        await update.effective_message.reply_text(status_text("error", "Use this in the admin channel."))
         return
     if not await is_superadmin(update.effective_user.id):
-        await update.effective_message.reply_text("⛔ Superadmin only.")
+        await update.effective_message.reply_text(status_text("error", "Superadmin only."))
         return
     if not context.args:
         await update.effective_message.reply_text("Usage: <code>/cycle start</code> or <code>/cycle finish</code>", parse_mode="HTML")
@@ -768,10 +785,12 @@ async def cycle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if action == "start":
         cycle = await start_cycle(update.effective_user.id)
         if not cycle:
-            await update.effective_message.reply_text("❌ Could not start cycle.")
+            await update.effective_message.reply_text(status_text("error", "Could not start cycle."))
             return
+        cycle_number = cycle.get("cycle_number")
         await update.effective_message.reply_text(
-            f"✅ Campaign cycle <b>#{cycle.get('cycle_number')}</b> is active.",
+            title("Campaign Cycle Started", "✅")
+            + f"\n\n{field('Cycle', f'<b>#{cycle_number}</b>')}",
             parse_mode="HTML",
         )
         return
@@ -779,24 +798,25 @@ async def cycle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if action == "finish":
         result = await finish_cycle(update.effective_user.id)
         if not result:
-            await update.effective_message.reply_text("❌ No active cycle to finish.")
+            await update.effective_message.reply_text(status_text("error", "No active cycle to finish."))
             return
         winners = result["winners"]
         lines = [
-            f"🏁 <b>Cycle #{result['finished_cycle'].get('cycle_number')} Finished</b>",
-            "━━━━━━━━━━━━━━━━━━",
+            title(f"Cycle #{result['finished_cycle'].get('cycle_number')} Finished", "🏁"),
+            "",
         ]
         rewards = ["$25", "$20", "$15", "$12", "$8"]
         if not winners:
-            lines.append("\nNo winners this cycle.")
+            lines.append("No winners this cycle.")
         else:
             for i, row in enumerate(winners, 1):
                 lines.append(
-                    f"\n{i}. {_display_user(row)} — <b>{row['xp']:,} XP</b> ({rewards[i - 1]})"
+                    f"{i}. {_display_user(row)} — <b>{row['xp']:,} XP</b> ({rewards[i - 1]})"
                 )
         new_cycle = result.get("new_cycle")
         if new_cycle:
-            lines.append(f"\n━━━━━━━━━━━━━━━━━━\nNew cycle started: <b>#{new_cycle.get('cycle_number')}</b>")
+            lines.append("")
+            lines.append(f"New cycle started: <b>#{new_cycle.get('cycle_number')}</b>")
 
         text = "\n".join(lines)
         await update.effective_message.reply_text(text, parse_mode="HTML")
@@ -806,7 +826,7 @@ async def cycle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             logger.warning("Could not announce cycle finish to community: %s", exc)
         return
 
-    await update.effective_message.reply_text("❌ Unknown cycle action.")
+    await update.effective_message.reply_text(status_text("error", "Unknown cycle action."))
 
 
 async def award_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -814,7 +834,7 @@ async def award_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if not update.effective_user or not update.effective_message:
         return
     if not await is_admin(update.effective_user.id, bot=context.bot):
-        await update.effective_message.reply_text("⛔ Admins only.")
+        await update.effective_message.reply_text(status_text("error", "Admins only."))
         return
     if not context.args or context.args[0].lower() != "helpful":
         await update.effective_message.reply_text(
@@ -824,12 +844,12 @@ async def award_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
     reply = update.effective_message.reply_to_message
     if not reply or not reply.from_user:
-        await update.effective_message.reply_text("❌ Reply to the helpful message you want to award.")
+        await update.effective_message.reply_text(status_text("error", "Reply to the helpful message you want to award."))
         return
 
     await get_or_create_user(reply.from_user.id, reply.from_user.username, reply.from_user.first_name)
     if await is_disqualified(reply.from_user.id):
-        await update.effective_message.reply_text("⛔ That user is disqualified from the current campaign cycle.")
+        await update.effective_message.reply_text(status_text("warning", "That user is disqualified from the current campaign cycle."))
         return
     reason = " ".join(context.args[1:]) or "Helpful community contribution"
     event = await award_xp(
@@ -845,7 +865,9 @@ async def award_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     await update.effective_message.reply_text(
-        f"✅ Awarded <b>{XP_HELPFUL} XP</b> to {html.escape(reply.from_user.first_name or str(reply.from_user.id))}.",
+        title("Helpful XP Awarded", "✅")
+        + f"\n\n{field('User', html.escape(reply.from_user.first_name or str(reply.from_user.id)))}"
+        + f"\n{field('XP', f'<b>{XP_HELPFUL}</b>')}",
         parse_mode="HTML",
     )
 
@@ -855,10 +877,10 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if not update.effective_user or not update.effective_message:
         return
     if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
-        await update.effective_message.reply_text("⛔ Use this in the admin channel.")
+        await update.effective_message.reply_text(status_text("error", "Use this in the admin channel."))
         return
     if not await is_superadmin(update.effective_user.id):
-        await update.effective_message.reply_text("⛔ Superadmin only.")
+        await update.effective_message.reply_text(status_text("error", "Superadmin only."))
         return
     if len(context.args) < 3:
         await update.effective_message.reply_text(
@@ -874,7 +896,7 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     try:
         target_id = int(context.args[1])
     except ValueError:
-        await update.effective_message.reply_text("❌ USER_ID must be a number.")
+        await update.effective_message.reply_text(status_text("error", "USER_ID must be a number."))
         return
     await get_or_create_user(target_id)
 
@@ -882,10 +904,10 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         try:
             amount = int(context.args[2])
         except ValueError:
-            await update.effective_message.reply_text("❌ AMOUNT must be a number.")
+            await update.effective_message.reply_text(status_text("error", "AMOUNT must be a number."))
             return
         if amount <= 0:
-            await update.effective_message.reply_text("❌ AMOUNT must be positive.")
+            await update.effective_message.reply_text(status_text("error", "AMOUNT must be positive."))
             return
         signed_amount = amount if action == "add" else -amount
         reason = " ".join(context.args[3:]) or f"Manual XP {action}"
@@ -896,7 +918,7 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         reason = " ".join(context.args[2:]) or "Disqualified by superadmin"
         event_type = "disqualification"
     else:
-        await update.effective_message.reply_text("❌ Unknown XP action.")
+        await update.effective_message.reply_text(status_text("error", "Unknown XP action."))
         return
 
     event = await award_xp(
@@ -910,10 +932,12 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
         return
 
+    visible_xp = event.get("new_total", 0)
     await update.effective_message.reply_text(
-        f"✅ XP updated for <code>{target_id}</code>.\n"
-        f"Change: <b>{signed_amount:+,}</b>\n"
-        f"New visible XP: <b>{event.get('new_total', 0):,}</b>",
+        title("XP Updated", "✅")
+        + f"\n\n{field('User', f'<code>{target_id}</code>')}"
+        + f"\n{field('Change', f'<b>{signed_amount:+,}</b>')}"
+        + f"\n{field('Visible XP', f'<b>{visible_xp:,}</b>')}",
         parse_mode="HTML",
     )
     await log_action(
@@ -994,7 +1018,7 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
         try:
             raid_id = int(data.rsplit("_", 1)[-1])
         except ValueError:
-            await query.message.reply_text("❌ Invalid raid button.")
+            await query.message.reply_text(status_text("error", "Invalid raid button."))
             return
         _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.message.chat_id})
         await query.message.reply_text(
@@ -1052,7 +1076,7 @@ async def campaign_guided_input_handler(update: Update, context: ContextTypes.DE
     elif action_type == "raid_proof":
         success = await _submit_raid_proof_url(update, context, int(pending.get("raid_id")), text)
     else:
-        await update.effective_message.reply_text("❌ Unknown campaign action. Cancelled.")
+        await update.effective_message.reply_text(status_text("error", "Unknown campaign action. Cancelled."))
         success = True
 
     if success:
@@ -1104,7 +1128,7 @@ async def process_invite_awards(bot) -> int:
             try:
                 await bot.send_message(
                     inviter,
-                    f"🎉 Your invite stayed 48 hours. You earned <b>{XP_INVITE} XP</b>!",
+                    title("Invite XP Awarded", "✅") + f"\n\n{field('XP earned', f'<b>{XP_INVITE}</b>')}",
                     parse_mode="HTML",
                 )
             except Exception:

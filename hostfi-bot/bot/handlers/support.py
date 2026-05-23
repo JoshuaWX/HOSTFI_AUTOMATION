@@ -11,6 +11,7 @@ import time
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.utils.formatter import field, status_text, title
 from bot.utils.rate_limiter import check_rate_limit
 from config import ADMIN_CHANNEL_ID
 from database.dm_conversations import (
@@ -89,7 +90,8 @@ async def ask_command(
 
     if not question.strip():
         await update.message.reply_text(
-            "💡 <b>Usage:</b> <code>/ask your question here</code>\n\n"
+            "<b>Usage</b>\n"
+            "<code>/ask your question here</code>\n\n"
             "Example: <code>/ask How do I fund my virtual card?</code>",
             parse_mode="HTML",
         )
@@ -101,8 +103,7 @@ async def ask_command(
     )
     if not allowed:
         await update.message.reply_text(
-            "⏳ You've reached the AI query limit (5 per hour). "
-            "Please try again later."
+            status_text("warning", "You've reached the AI query limit of 5 per hour. Please try again later.")
         )
         return
 
@@ -138,11 +139,14 @@ async def ask_command(
             if guardrail.is_emergency:
                 # Alert admin channel about the emergency
                 safe_question = html.escape(question[:300])
-                alert_text = (
-                    f"🚨 <b>Emergency Escalation</b>\n\n"
-                    f"👤 User: {html.escape(user.first_name or str(user.id))}\n"
-                    f"🆔 ID: <code>{user.id}</code>\n"
-                    f"💬 Message: {safe_question}"
+                alert_text = "\n".join(
+                    [
+                        title("Emergency Escalation", "🚨"),
+                        "",
+                        field("User", html.escape(user.first_name or str(user.id))),
+                        field("ID", f"<code>{user.id}</code>"),
+                        field("Message", safe_question),
+                    ]
                 )
                 try:
                     await context.bot.send_message(
@@ -202,10 +206,7 @@ async def ask_command(
         disclaimer_ms = (time.perf_counter() - disclaimer_start) * 1000
 
         # Format final response
-        response = (
-            f"🤖 <b>HOSTFI Assistant</b>\n\n"
-            f"{html.escape(answer)}"
-        )
+        response = f"{title('HOSTFI Assistant', '🤖')}\n\n{html.escape(answer)}"
 
         # Handle potential Telegram message length limit (4096 chars)
         if len(response) > 4000:
@@ -263,8 +264,7 @@ async def ask_command(
             "AI support handler error for user %s: %s", user.id, exc
         )
         await update.message.reply_text(
-            "❌ Sorry, I encountered an error processing your question. "
-            "Please try again or contact HOSTFI support directly."
+            status_text("error", "Sorry, I encountered an error processing your question. Please try again or contact HOSTFI support directly.")
         )
 
         await log_action(
