@@ -487,6 +487,11 @@ async def adminhelp_command(
             "<b>📢 Broadcast</b>\n"
             "/broadcast — Start broadcast flow\n"
             '/poll "Q?" "Opt1" "Opt2" — Create a poll\n\n'
+            "<b>🏆 XP Campaign</b>\n"
+            "/cycle start|finish — Manage cycles (superadmin)\n"
+            "/raid create &lt;url&gt; [hours] — Create raid\n"
+            "/award helpful [reason] — Award replied helpful message\n"
+            "/xp add|deduct|disqualify — Adjust campaign XP\n\n"
             "<b>🎫 Tickets</b>\n"
             "/tickets — View all active tickets\n"
             "/reply &lt;HSTF-0001&gt; &lt;msg&gt; — Reply to ticket user\n"

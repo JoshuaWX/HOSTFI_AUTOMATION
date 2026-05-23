@@ -7,9 +7,9 @@ Community management, AI-powered support, and crypto market data bot for HOSTFI.
 ## Features
 
 - **Community Management** — Welcome flow with math CAPTCHA, spam/scam detection, flood control
-- **AI Support** — RAG-powered Q&A using HOSTFI knowledge base (Groq + ChromaDB)
+- **AI Support** — RAG-powered Q&A using HOSTFI knowledge base (Gemini + ChromaDB)
 - **Live Market Data** — Crypto prices, market overview, Fear & Greed Index, price alerts
-- **Broadcast & Engagement** — Admin broadcasts, native polls, XP system, referral tracking
+- **Broadcast & Engagement** — Admin broadcasts, native polls, cycle-based XP campaign, invite tracking, X raids
 - **Support Tickets** — Full ticket lifecycle with claim, reply, close, and rating
 - **Admin Dashboard** — Stats, user lookup, knowledge base re-indexing, daily reports
 
@@ -21,7 +21,7 @@ Community management, AI-powered support, and crypto market data bot for HOSTFI.
 |---|---|
 | Bot Framework | python-telegram-bot 20.7 (async, webhook) |
 | Web Server | FastAPI + uvicorn |
-| AI | Groq API (llama-3.3-70b-versatile) |
+| AI | Gemini API (`gemini-2.5-flash`) |
 | Embeddings | sentence-transformers (all-MiniLM-L6-v2) |
 | Vector DB | ChromaDB (local persistent) |
 | Database | Supabase (PostgreSQL) |
@@ -39,7 +39,7 @@ Community management, AI-powered support, and crypto market data bot for HOSTFI.
 - Python 3.11+
 - A Telegram Bot Token (from [@BotFather](https://t.me/BotFather))
 - Supabase project (free tier works)
-- Groq API key (from [console.groq.com](https://console.groq.com))
+- Gemini API key (from [Google AI Studio](https://aistudio.google.com/))
 - Upstash Redis instance (see Redis Setup below)
 
 > **ChromaDB** and **CoinGecko** require **zero setup** — ChromaDB runs locally (auto-creates a `chroma_db/` folder on first run) and CoinGecko's free API needs no API key.
@@ -71,7 +71,10 @@ Edit `.env` with your actual credentials. **Detailed instructions for each varia
 | `WEBHOOK_URL` | **Yes** | Your public URL | See **Run Locally** or **Railway Deployment** |
 | `SUPERADMIN_ID` | **Yes** | Your Telegram user ID (bot owner) | See **Getting Telegram IDs** |
 | `COMMUNITY_GROUP_ID` | **Yes** | Community group ID (starts with `-100`) | See **Getting Telegram IDs** |
-| `GROQ_API_KEY` | **Yes** | Groq API key | See **Groq Setup** |
+| `GEMINI_API_KEY` | **Yes** | Gemini API key | See **Gemini Setup** |
+| `GEMINI_MODEL` | No | Gemini model, defaults to `gemini-2.5-flash` | `.env.example` |
+| `X_BEARER_TOKEN` | For XP campaign X features | Official X API bearer token | X Developer Portal |
+| `X_API_BASE_URL` | No | X API base URL, defaults to `https://api.x.com/2` | `.env.example` |
 | `SUPABASE_URL` | **Yes** | Supabase project URL | See **Supabase Setup** |
 | `SUPABASE_KEY` | **Yes** | Supabase anon/public key | See **Supabase Setup** |
 | `ADMIN_IDS` | No | Extra admin IDs (optional — see below) | See **How Admins Work** |
@@ -90,12 +93,13 @@ Edit `.env` with your actual credentials. **Detailed instructions for each varia
    - `SUPABASE_KEY` = the **anon public** key (the long `eyJ...` string under "Project API keys")
 4. Paste both into your `.env`
 
-### 5. Groq Setup
+### 5. Gemini Setup
 
-1. Sign up at [console.groq.com](https://console.groq.com)
-2. Go to **API Keys** in the left sidebar
+1. Open [Google AI Studio](https://aistudio.google.com/)
+2. Go to **API Keys**
 3. Click **Create API Key**, give it a name, and copy the key
-4. Add it to `.env` as `GROQ_API_KEY`
+4. Add it to `.env` as `GEMINI_API_KEY`
+5. Keep `GEMINI_MODEL=gemini-2.5-flash` unless you intentionally change models
 
 ### 6. Redis Setup
 
@@ -195,6 +199,13 @@ When users type `/` in the chat, Telegram shows a command menu. **Only register 
    alert - Set price alerts
    ask - Ask the AI assistant
    support - Open a support ticket
+   campaign - Current XP campaign
+   xp - Your campaign XP
+   invite - Get your campaign invite link
+   xlink - Link your X account
+   xverify - Verify your X account
+   raids - Active HostFi raids
+   xpost - Submit a HostFi X post
    rank - Your XP and rank
    leaderboard - Top 10 members
    ```
@@ -227,7 +238,7 @@ You don't need everything set up to start testing. Here's the recommended order:
 1. **Get your bot token** from BotFather and set `TELEGRAM_BOT_TOKEN`
 2. **Get your user ID** from @userinfobot and set `SUPERADMIN_ID`
 3. **Create Supabase project**, run `schema.sql`, set `SUPABASE_URL` + `SUPABASE_KEY`
-4. **Get Groq API key** and set `GROQ_API_KEY`
+4. **Get Gemini API key** and set `GEMINI_API_KEY`
 5. **Generate webhook secret** and set `TELEGRAM_WEBHOOK_SECRET`
 6. **Set up ngrok** → set `WEBHOOK_URL` to the ngrok URL
 7. **Run `python main.py`** — the bot will start! You can test `/start`, `/help`, `/price btc`, `/ask` in DM
@@ -309,7 +320,8 @@ git push -u origin main
    SUPERADMIN_ID=your_user_id
    COMMUNITY_GROUP_ID=your_group_id                  (use 0 temporarily if you don't have it yet)
    ADMIN_CHANNEL_ID=0                                (set later when you create the admin channel)
-   GROQ_API_KEY=your_groq_key
+   GEMINI_API_KEY=your_gemini_key
+   GEMINI_MODEL=gemini-2.5-flash
    SUPABASE_URL=your_supabase_url
    SUPABASE_KEY=your_supabase_key
    ```
@@ -318,13 +330,15 @@ git push -u origin main
    ADMIN_IDS=                    (leave empty — group admins are auto-detected)
    UPSTASH_REDIS_URL=            (leave empty if you don't have Redis yet)
    UPSTASH_REDIS_TOKEN=          (leave empty if you don't have Redis yet)
+   X_BEARER_TOKEN=               (required only for X account linking, raids, and /xpost)
+   X_API_BASE_URL=https://api.x.com/2
    ```
 5. Go to **Settings → Networking → Public Networking** and click **Generate Domain**
 6. Railway gives you a URL like `https://hostfi-bot-production.up.railway.app`
 7. Go back to **Variables** and set `WEBHOOK_URL` to this Railway domain
 8. Railway will auto-detect the `Procfile` and deploy
 
-> **If Railway shows a build error:** It means you're missing required env vars. The bot needs `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `WEBHOOK_URL`, `SUPERADMIN_ID`, `GROQ_API_KEY`, `SUPABASE_URL`, and `SUPABASE_KEY` to start. Set them all in the Variables tab and redeploy.
+> **If Railway shows a build error:** It means you're missing required env vars. The bot needs `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `WEBHOOK_URL`, `SUPERADMIN_ID`, `GEMINI_API_KEY`, `SUPABASE_URL`, and `SUPABASE_KEY` to start. Set them all in the Variables tab and redeploy.
 
 ### 3. Verify
 
@@ -353,7 +367,8 @@ hostfi-bot/
 │   │   ├── moderation.py      # Warn, mute, ban, kick
 │   │   ├── support.py         # AI /ask command
 │   │   ├── market.py          # Price, rates, alerts
-│   │   ├── broadcast.py       # Broadcast, poll, XP, referrals
+│   │   ├── broadcast.py       # Broadcast, poll, campaign leaderboard
+│   │   ├── campaign.py        # XP cycles, invites, raids, X posts
 │   │   ├── tickets.py         # Support tickets
 │   │   └── admin.py           # Stats, lookup, reindex
 │   ├── filters/
@@ -363,12 +378,13 @@ hostfi-bot/
 │       ├── permissions.py     # Admin checks
 │       ├── formatter.py       # HTML formatters
 │       ├── keyboards.py       # Inline keyboards
-│       └── rate_limiter.py    # Rate limiting
+│       ├── rate_limiter.py    # Rate limiting
+│       └── x_api.py           # Official X API verification
 │
 ├── rag/
 │   ├── ingestion.py           # Knowledge base ingestion
 │   ├── retriever.py           # ChromaDB search
-│   ├── ai_engine.py           # Groq API
+│   ├── ai_engine.py           # Gemini API
 │   ├── guardrails.py          # Safety checks
 │   └── knowledge_base/        # .txt knowledge files
 │
@@ -379,7 +395,8 @@ hostfi-bot/
     ├── client.py              # Supabase client
     ├── users.py               # User CRUD
     ├── tickets.py             # Ticket CRUD
-    ├── referrals.py           # Referral CRUD
+    ├── referrals.py           # Legacy referral CRUD
+    ├── campaign.py            # Campaign XP ledger CRUD
     ├── alerts.py              # Price alert CRUD
     ├── logs.py                # Audit logs
     └── schema.sql             # Database schema
@@ -394,7 +411,7 @@ hostfi-bot/
 | Daily Market Digest | 9:00 AM WAT | Community group |
 | Daily Admin Report | 7:00 AM WAT | Admin channel |
 | Weekly Leaderboard | Sunday 12:00 PM WAT | Community group |
-| Price Alert Checker | Every 5 minutes | User DMs |
+| Campaign Invite Award Checker | Every 30 minutes | Inviter DMs |
 | Ticket Escalation | Every 30 minutes | Admin channel |
 
 ---
@@ -404,7 +421,7 @@ hostfi-bot/
 ### User Commands
 | Command | Description |
 |---|---|
-| `/start` | Start bot + referral link |
+| `/start` | Start bot |
 | `/help` | Show all commands |
 | `/rules` | Community rules |
 | `/price [coin]` | Live crypto price |
@@ -414,6 +431,14 @@ hostfi-bot/
 | `/alert set\|cancel\|list` | Price alerts |
 | `/ask [question]` | AI assistant |
 | `/support` | Open support ticket |
+| `/campaign` | Current XP campaign rules and status |
+| `/xp` | Your current campaign XP |
+| `/invite` | Generate your campaign invite link |
+| `/xlink @handle` | Start X account verification |
+| `/xverify [url]` | Verify your X account |
+| `/raids` | View active X raids |
+| `/raid submit [id] [url]` | Submit raid proof |
+| `/xpost [url]` | Submit a HostFi X post for XP |
 | `/rank` | Your XP rank |
 | `/leaderboard` | Top 10 members |
 
@@ -430,6 +455,10 @@ hostfi-bot/
 | `/announce` | Send announcement |
 | `/broadcast` | Broadcast to community |
 | `/poll` | Create a poll |
+| `/cycle start\|finish` | Start or finish campaign cycle |
+| `/raid create [url] [hours]` | Create approved X raid |
+| `/award helpful [reason]` | Award helpful contribution XP |
+| `/xp add\|deduct\|disqualify` | Superadmin XP controls |
 | `/tickets` | View active tickets |
 | `/reply` | Reply to ticket user |
 | `/close` | Resolve a ticket |

@@ -30,7 +30,7 @@ from bot.utils.permissions import get_admin_ids, is_admin
 from bot.utils.rate_limiter import check_rate_limit, get_redis
 from config import ADMIN_CHANNEL_ID, MAX_MESSAGES_PER_MINUTE
 from database.logs import log_action
-from database.users import add_xp, get_or_create_user, is_user_verified, verify_user
+from database.users import get_or_create_user, is_user_verified, verify_user
 
 logger = logging.getLogger(__name__)
 
@@ -99,6 +99,9 @@ async def new_member_handler(
         return
 
     chat_id = update.effective_chat.id
+    from bot.handlers.campaign import record_new_member_invite
+
+    await record_new_member_invite(update)
 
     for member in update.message.new_chat_members:
         if member.is_bot:
@@ -513,11 +516,7 @@ async def group_message_filter(
             )
         return
 
-    # --- XP award (+1 per message that passes all checks) --------------------
-    try:
-        await add_xp(user.id, 1)
-    except Exception:
-        pass  # XP award is non-critical, swallow errors silently
+    # General chatting intentionally earns no campaign XP.
 
 
 # ---------------------------------------------------------------------------

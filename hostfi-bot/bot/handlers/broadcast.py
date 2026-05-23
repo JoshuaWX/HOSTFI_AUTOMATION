@@ -1,6 +1,6 @@
 """
 Module: broadcast.py
-Purpose: Broadcast, poll, XP rank/leaderboard, and referral deep-link handlers
+Purpose: Broadcast, poll, and campaign XP leaderboard handlers
 Author: HOSTFI Bot Team
 """
 
@@ -18,12 +18,9 @@ from bot.utils.permissions import is_admin
 from bot.utils.rate_limiter import check_rate_limit, get_redis
 from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_ID, TELEGRAM_BOT_TOKEN
 from database.logs import log_action
-from database.referrals import create_referral, get_referral_count
+from database.campaign import get_campaign_leaderboard, get_campaign_rank
 from database.users import (
-    add_xp,
-    get_leaderboard,
     get_or_create_user,
-    get_user_rank,
 )
 
 logger = logging.getLogger(__name__)
@@ -40,7 +37,7 @@ _pending_broadcasts: dict[str, dict] = {}
 
 
 # ---------------------------------------------------------------------------
-# /start command with referral deep link
+# /start command
 # ---------------------------------------------------------------------------
 
 
@@ -48,11 +45,9 @@ async def start_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """
-    Handle /start — welcome message and referral deep link processing.
+    Handle /start welcome message.
 
-    Deep link format: /start ref_<REFERRER_TELEGRAM_ID>
-    When a user joins via a referral link, the referral is recorded
-    and the referrer earns +5 XP.
+    Campaign invite XP is tracked through /invite links, not /start deep links.
 
     Args:
         update: Incoming Telegram update
@@ -65,39 +60,6 @@ async def start_command(
         user = update.effective_user
         await get_or_create_user(user.id, user.username, user.first_name)
 
-        # Process referral deep link
-        if context.args and context.args[0].startswith("ref_"):
-            try:
-                referrer_id = int(context.args[0][4:])
-                if referrer_id != user.id:
-                    referral = await create_referral(referrer_id, user.id)
-                    if referral:
-                        await add_xp(referrer_id, 5)
-                        logger.info(
-                            "Referral recorded: %s referred %s (+5 XP)",
-                            referrer_id,
-                            user.id,
-                        )
-                        # Notify referrer
-                        try:
-                            await context.bot.send_message(
-                                chat_id=referrer_id,
-                                text=(
-                                    "🎉 <b>Referral Bonus!</b>\n\n"
-                                    f"Your referral {html.escape(user.first_name or 'Someone')} "
-                                    "just joined HostFi Bot!\n"
-                                    "You earned <b>+5 XP</b>! 🏆"
-                                ),
-                                parse_mode="HTML",
-                            )
-                        except Exception:
-                            pass  # Referrer may have blocked the bot
-            except (ValueError, IndexError):
-                pass  # Invalid referral link, ignore silently
-
-        # Extract bot username from token for referral link
-        bot_username = (await context.bot.get_me()).username
-
         await update.effective_message.reply_text(
             "🎉 <b>Welcome to the HOSTFI Bot!</b>\n\n"
             "I'm your all-in-one crypto community assistant.\n\n"
@@ -106,9 +68,8 @@ async def start_command(
             "• 🎫 /support — Open a support ticket\n"
             "• 🏆 /rank — Check your XP rank\n"
             "• 🏅 /leaderboard — Top members\n\n"
-            f"📣 <b>Share your referral link:</b>\n"
-            f"<code>https://t.me/{bot_username}?start=ref_{user.id}</code>\n\n"
-            "Earn <b>+5 XP</b> for every friend who joins! 🎁",
+            "Use /campaign to see current XP campaign rules.\n"
+            "Use /invite to get your campaign invite link.",
             parse_mode="HTML",
         )
 
@@ -143,14 +104,12 @@ async def rank_command(
             )
             return
 
-        xp, rank, total = await get_user_rank(user_id)
-        referrals = await get_referral_count(user_id)
+        xp, rank, total, cycle = await get_campaign_rank(user_id)
 
         name = html.escape(
             update.effective_user.first_name or str(user_id)
         )
 
-        # Rank badge based on XP
         if xp >= 500:
             badge = "👑 Legend"
         elif xp >= 200:
@@ -164,23 +123,29 @@ async def rank_command(
         else:
             badge = "🌱 Newcomer"
 
-        # Extract bot username for referral link
-        bot_username = (await context.bot.get_me()).username
-
-        msg = (
-            f"🏆 <b>{name}'s Profile</b>\n"
-            f"━━━━━━━━━━━━━━━━━━\n\n"
-            f"⭐ <b>XP:</b> {xp:,} points\n"
-            f"📊 <b>Rank:</b> #{rank} of {total}\n"
-            f"🏅 <b>Badge:</b> {badge}\n"
-            f"👥 <b>Referrals:</b> {referrals}\n\n"
-            f"<b>How to earn XP:</b>\n"
-            f"• 💬 +1 XP — Send a message in the group\n"
-            f"• 👥 +5 XP — Refer a new member\n"
-            f"• ⭐ +10 XP — Get a 5-star ticket rating\n\n"
-            f"📣 <b>Your referral link:</b>\n"
-            f"<code>https://t.me/{bot_username}?start=ref_{user_id}</code>"
+        lines = [
+            f"🏆 <b>{name}'s Profile</b>",
+            "━━━━━━━━━━━━━━━━━━",
+            "",
+        ]
+        if cycle:
+            lines.append(f"Cycle: <b>#{cycle.get('cycle_number')}</b>")
+        lines.append(f"⭐ <b>XP:</b> {xp:,} points")
+        lines.append(f"📊 <b>Rank:</b> #{rank} of {total}" if rank else "📊 <b>Rank:</b> Not ranked yet")
+        lines.extend(
+            [
+                f"🏅 <b>Badge:</b> {badge}",
+                "",
+                "<b>How to earn XP:</b>",
+                "• 🚀 50 XP — Approved X raids",
+                "• 👥 70 XP — Telegram invites after 48h",
+                "• ✍️ 80 XP — HostFi X posts (1/day)",
+                "• 💡 100 XP — Helpful approved contributions",
+                "",
+                "Get your invite link with /invite",
+            ]
         )
+        msg = "\n".join(lines)
 
         await update.effective_message.reply_text(msg, parse_mode="HTML")
 
@@ -218,11 +183,11 @@ async def leaderboard_command(
             )
             return
 
-        top_users = await get_leaderboard(10)
+        top_users = await get_campaign_leaderboard(10)
 
         if not top_users:
             await update.effective_message.reply_text(
-                "📊 No leaderboard data yet. Start chatting to earn XP!"
+                "📊 No campaign leaderboard data yet. Earn XP through raids, invites, posts, and approved helpful contributions."
             )
             return
 
@@ -233,11 +198,11 @@ async def leaderboard_command(
             prefix = medals[i] if i < 3 else f"  {i + 1}."
             name = user.get("first_name") or user.get("username") or "User"
             safe_name = html.escape(name)
-            xp = user.get("xp_points", 0)
+            xp = user.get("xp", 0)
             lines.append(f"\n{prefix} <b>{safe_name}</b> — {xp:,} XP")
 
         lines.append("\n━━━━━━━━━━━━━━━━━━")
-        lines.append("💬 Earn XP by chatting, referring friends, and helping others!")
+        lines.append("Campaign ties are ranked by earliest approved XP event.")
 
         await update.effective_message.reply_text(
             "\n".join(lines), parse_mode="HTML"
@@ -648,7 +613,7 @@ async def build_leaderboard_message() -> str:
     Returns:
         HTML-formatted leaderboard string
     """
-    top_users = await get_leaderboard(10)
+    top_users = await get_campaign_leaderboard(10)
 
     lines: list[str] = [
         "🏅 <b>Weekly XP Leaderboard</b>",
@@ -658,19 +623,19 @@ async def build_leaderboard_message() -> str:
     ]
 
     if not top_users:
-        lines.append("\nNo data yet — start chatting to earn XP!")
+        lines.append("\nNo data yet — complete raids, invite members, post about HostFi, or earn helpful contribution awards.")
     else:
         medals = ["🥇", "🥈", "🥉"]
         for i, user in enumerate(top_users):
             prefix = medals[i] if i < 3 else f"  {i + 1}."
             name = user.get("first_name") or user.get("username") or "User"
             safe_name = html.escape(name)
-            xp = user.get("xp_points", 0)
+            xp = user.get("xp", 0)
             lines.append(f"\n{prefix} <b>{safe_name}</b> — {xp:,} XP")
 
     lines.append("\n━━━━━━━━━━━━━━━━━━")
     lines.append(
-        "💬 Earn XP: chat (+1), refer friends (+5), 5⭐ tickets (+10)\n"
+        "Earn XP: raids, retained invites, HostFi X posts, and helpful contributions\n"
         "📲 Trade on <b>HostFi</b> — https://hostfi.io"
     )
 

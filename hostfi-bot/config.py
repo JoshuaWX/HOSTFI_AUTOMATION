@@ -84,9 +84,16 @@ _raw_community_group = os.getenv("COMMUNITY_GROUP_ID", "")
 COMMUNITY_GROUP_ID: int = int(_raw_community_group) if _raw_community_group.strip() else 0
 
 # ---------------------------------------------------------------------------
-# Groq AI
+# Gemini AI
 # ---------------------------------------------------------------------------
-GROQ_API_KEY: str = _require_env("GROQ_API_KEY")
+GEMINI_API_KEY: str = _require_env("GEMINI_API_KEY")
+GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+# ---------------------------------------------------------------------------
+# X API
+# ---------------------------------------------------------------------------
+X_BEARER_TOKEN: str = os.getenv("X_BEARER_TOKEN", "")
+X_API_BASE_URL: str = os.getenv("X_API_BASE_URL", "https://api.x.com/2").rstrip("/")
 
 # ---------------------------------------------------------------------------
 # Embeddings

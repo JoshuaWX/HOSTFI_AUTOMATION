@@ -51,6 +51,7 @@ def setup_scheduler(application: Application) -> AsyncIOScheduler:
     - **price_alert_checker**: Checks active alerts every 5 minutes
     - **weekly_leaderboard**: Posts XP leaderboard Sundays at 12:00 PM WAT
     - **ticket_escalation**: Re-alerts unclaimed tickets every 30 minutes
+    - **invite_awards**: Awards invite XP after 48-hour retention checks
     - **daily_report**: Posts admin report to admin channel at 7:00 AM WAT
 
     Args:
@@ -99,6 +100,15 @@ def setup_scheduler(application: Application) -> AsyncIOScheduler:
         args=[application],
         id="ticket_escalation",
         name="Ticket Escalation Checker",
+        replace_existing=True,
+    )
+
+    scheduler.add_job(
+        invite_awards_job,
+        trigger=IntervalTrigger(minutes=30),
+        args=[application],
+        id="invite_awards",
+        name="Campaign Invite Award Checker",
         replace_existing=True,
     )
 
@@ -337,6 +347,29 @@ async def ticket_escalation_job(application: Application) -> None:
 
     except Exception as exc:
         logger.error("Ticket escalation check failed: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Job: Campaign Invite Awards (every 30 minutes)
+# ---------------------------------------------------------------------------
+
+
+async def invite_awards_job(application: Application) -> None:
+    """
+    Award campaign invite XP after invitees remain in the group for 48 hours.
+
+    Args:
+        application: The telegram.ext.Application instance
+    """
+    try:
+        from bot.handlers.campaign import process_invite_awards
+
+        count = await process_invite_awards(application.bot)
+        if count:
+            logger.info("Campaign invite awards: %d invite(s) credited", count)
+
+    except Exception as exc:
+        logger.error("Campaign invite award check failed: %s", exc)
 
 
 # ---------------------------------------------------------------------------

@@ -69,7 +69,7 @@ async def ask_command(
     3. If DM: retrieve recent conversation history for session context
     4. Retrieve top-3 knowledge chunks from ChromaDB
     5. Run guardrails (emergency → off-topic → confidence)
-    6. If guardrails pass: call Groq API with context + question (+history if DM)
+    6. If guardrails pass: call Gemini API with context + question (+history if DM)
     7. Optionally append fee/rate disclaimer
     8. If DM: save question and response to conversation history
     9. Log query to Supabase for quality monitoring

@@ -16,7 +16,7 @@
 
 You are a **Senior Python Engineer** specializing in:
 - Telegram bot development (python-telegram-bot v20+ async)
-- AI/RAG pipeline engineering (ChromaDB, sentence-transformers, Groq API)
+- AI/RAG pipeline engineering (ChromaDB, sentence-transformers, Gemini API)
 - Fintech-grade security and input validation
 - Async Python architecture and clean modular code design
 - Production deployment on Railway.app
@@ -80,7 +80,7 @@ Telegram → FastAPI Webhook → Command Router → Module Handlers
 Runtime:          Python 3.11+
 Bot Framework:    python-telegram-bot==20.7 (async, webhook mode)
 Web Server:       FastAPI + uvicorn
-AI Completion:    Groq API (model: llama-3.3-70b-versatile)
+AI Completion:    Gemini API (model: gemini-2.5-flash)
 Embeddings:       sentence-transformers (model: all-MiniLM-L6-v2)
 Vector DB:        chromadb (local persistent)
 Main DB:          supabase-py (PostgreSQL via Supabase)
@@ -137,7 +137,7 @@ hostfi-bot/
 │   ├── __init__.py
 │   ├── ingestion.py           # Scrape → clean → chunk → embed → store
 │   ├── retriever.py           # ChromaDB similarity search
-│   ├── ai_engine.py           # Groq API call with strict system prompt
+│   ├── ai_engine.py           # Gemini API call with strict system prompt
 │   ├── guardrails.py          # Confidence checks, topic validation
 │   └── knowledge_base/
 │       ├── hostfi_website.txt
@@ -180,8 +180,13 @@ SUPERADMIN_ID=123456789
 ADMIN_CHANNEL_ID=-1001234567890        # Private admin ops channel ID
 COMMUNITY_GROUP_ID=-1009876543210      # Main community group ID
 
-# Groq AI
-GROQ_API_KEY=your_groq_api_key
+# Gemini AI
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_MODEL=gemini-2.5-flash
+
+# X API
+X_BEARER_TOKEN=your_x_bearer_token
+X_API_BASE_URL=https://api.x.com/2
 
 # Supabase
 SUPABASE_URL=https://yourproject.supabase.co
@@ -305,7 +310,7 @@ CREATE TABLE tickets (
     ticket_number SERIAL,
     user_telegram_id BIGINT NOT NULL,
     issue_description TEXT NOT NULL,
-    status TEXT DEFAULT 'open' CHECK (status IN ('open', 'claimed', 'resolved', 'closed')),
+    status TEXT DEFAULT 'open' CHECK (status IN ('open', 'claimed', 'resolved', 'closed', 'cancelled')),
     assigned_admin_id BIGINT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     resolved_at TIMESTAMPTZ,
@@ -334,7 +339,9 @@ CREATE TABLE price_alerts (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- XP and referrals table
+-- Legacy referrals table. Campaign XP now uses campaign_cycles, xp_events,
+-- campaign_invite_links, campaign_invite_joins, x_accounts, raids,
+-- raid_submissions, and x_post_submissions in database/schema.sql.
 CREATE TABLE referrals (
     id BIGSERIAL PRIMARY KEY,
     referrer_telegram_id BIGINT NOT NULL,
@@ -422,12 +429,12 @@ Create these files completely:
 1. `rag/ingestion.py` — scrape URLs, clean text, chunk (500 tokens, 50 overlap), embed with sentence-transformers, store in ChromaDB
 2. `rag/retriever.py` — query ChromaDB for top 3 chunks by cosine similarity, return chunks + scores
 3. `rag/guardrails.py` — check confidence threshold (0.72), topic boundary check, emergency keyword detection
-4. `rag/ai_engine.py` — build prompt with context, call Groq API, return grounded answer
+4. `rag/ai_engine.py` — build prompt with context, call Gemini API, return grounded answer
 5. `bot/handlers/support.py` — /ask command handler: get question → retrieve → guardrail check → AI answer → send
 6. `rag/knowledge_base/manual_guides.txt` — write 30 realistic HOSTFI FAQs covering: account creation, KYC, deposits, withdrawals, swap fees, card creation, card funding, transaction limits, supported currencies, troubleshooting
 
 Rules:
-- If confidence < 0.72: respond with fallback message, do NOT call Groq API
+- If confidence < 0.72: respond with fallback message, do NOT call Gemini API
 - Emergency keywords (hacked, scammed, lost funds, stolen): skip AI, ping admin channel immediately
 - Every AI response appends disclaimer for fee/rate mentions
 - Rate limit: 5 AI queries per user per hour (Redis)
@@ -537,7 +544,7 @@ Create these files completely:
 6. `.env.example` — template with all variable names, no real values
 7. `railway.toml` — Railway deployment configuration
 8. `Procfile` — process definition
-9. `README.md` — setup guide covering: bot token setup, Supabase setup, Groq setup, Railway deploy steps
+9. `README.md` — setup guide covering: bot token setup, Supabase setup, Gemini setup, Railway deploy steps
 
 Daily Report (posted to admin channel at 7am WAT):
 📊 HOSTFI Bot Daily Report — {date}

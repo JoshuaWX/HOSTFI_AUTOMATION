@@ -27,7 +27,6 @@ from database.tickets import (
     rate_ticket,
     resolve_ticket,
 )
-from database.users import add_xp
 
 logger = logging.getLogger(__name__)
 
@@ -690,20 +689,6 @@ async def rating_callback(
         "Thank you for your feedback! 🙏",
         parse_mode="HTML",
     )
-
-    # +10 XP for 5-star rating
-    if rating == 5:
-        admin_id = ticket.get("assigned_admin_id")
-        if admin_id:
-            try:
-                await add_xp(admin_id, 10)
-                logger.info(
-                    "Admin %s earned +10 XP from 5-star ticket %s",
-                    admin_id,
-                    ticket_id,
-                )
-            except Exception:
-                pass  # XP is non-critical
 
     # Notify admin channel about the rating
     try:

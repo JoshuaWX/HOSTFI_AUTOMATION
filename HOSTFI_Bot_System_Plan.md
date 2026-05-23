@@ -131,7 +131,7 @@ The bot is not a single-purpose tool. It operates across three distinct surfaces
 └──────────────┬──────────┘  └────────────┬────────────────┘
                │                          │
 ┌──────────────▼──────────┐  ┌────────────▼────────────────┐
-│   REDIS CACHE (Upstash) │  │  CoinGecko API / Groq AI    │
+│   REDIS CACHE (Upstash) │  │  CoinGecko API / Gemini AI  │
 └─────────────────────────┘  └─────────────────────────────┘
 ```
 
@@ -146,7 +146,7 @@ The entire system is built on free and low-cost tools without sacrificing perfor
 | Bot Framework | python-telegram-bot v20+ | Core async bot engine, handles all Telegram events | Free |
 | Language | Python 3.11+ | Primary development language | Free |
 | Web Framework | FastAPI | Webhook handler for incoming Telegram updates | Free |
-| AI Completion | Groq API (Llama 3.3 70B) | Generate answers from RAG context chunks | Near-free |
+| AI Completion | Gemini API (Gemini 2.5 Flash) | Generate answers from RAG context chunks | Usage-based |
 | Embeddings | sentence-transformers | Convert text to vectors for semantic search | Free |
 | Vector Database | ChromaDB (local) | Store and search knowledge base embeddings | Free |
 | Main Database | Supabase (PostgreSQL) | User data, tickets, logs, settings | Free tier |
@@ -202,7 +202,7 @@ The most technically sophisticated module. Enables the bot to answer questions a
 | STEP 2 | Embedding Generation | Each text chunk is converted into a numerical vector using sentence-transformers, enabling semantic/meaning-based search. |
 | STEP 3 | Vector Storage | All embeddings are stored in ChromaDB — a local vector database optimized for fast similarity search. |
 | STEP 4 | Query Processing | User question is converted to an embedding. ChromaDB finds the top 3 most semantically similar chunks from the knowledge base. |
-| STEP 5 | Grounded AI Response | Only matching chunks are sent to Groq AI (Llama 3.3 70B). AI is instructed to ONLY answer using the provided context. |
+| STEP 5 | Grounded AI Response | Only matching chunks are sent to Gemini AI (Gemini 2.5 Flash). AI is instructed to ONLY answer using the provided context. |
 | STEP 6 | Guardrails Applied | If no relevant chunks are found, bot responds: *"I'm not sure about that — please contact HOSTFI support directly."* |
 
 #### Safety Guardrails
@@ -347,7 +347,7 @@ hostfi-bot/
 ├── rag/
 │   ├── ingestion.py           # Scrape + chunk + embed knowledge base
 │   ├── retriever.py           # Query ChromaDB for relevant chunks
-│   ├── ai_engine.py           # Send context + query to Groq API
+│   ├── ai_engine.py           # Send context + query to Gemini API
 │   ├── guardrails.py          # Confidence checks, topic boundaries
 │   └── knowledge_base/
 │       ├── hostfi_website.txt
@@ -387,7 +387,7 @@ Each phase has a clear deliverable that can be tested and demonstrated independe
 - [ ] Scrape and clean all public HOSTFI content
 - [ ] Build ingestion pipeline: chunk → embed → store in ChromaDB
 - [ ] Build retriever: semantic search against knowledge base
-- [ ] Integrate Groq API with strict system prompt and guardrails
+- [ ] Integrate Gemini API with strict system prompt and guardrails
 - [ ] Implement confidence threshold and escalation logic
 - [ ] Test with 50 sample user questions, validate accuracy
 
@@ -459,7 +459,7 @@ Once integrated with the HOSTFI app backend (Phase 2 — post employment/partner
 | **APScheduler** | Advanced Python Scheduler — a library for running tasks on a schedule (e.g. post digest every day at 9am). |
 | **Redis** | An in-memory data store used for caching, rate limiting, and storing temporary session data. |
 | **Supabase** | An open-source Firebase alternative. Provides a PostgreSQL database, REST API, and real-time features with a generous free tier. |
-| **Groq** | An AI inference platform that runs open-source models (Llama 3.3 70B) at very high speed and extremely low cost. |
+| **Gemini** | Google's generative AI model family. This bot uses Gemini 2.5 Flash for grounded RAG answers. |
 | **Rate Limiting** | Restricting how many times a user can use a command in a given time window. Prevents abuse and server overload. |
 | **Confidence Threshold** | In the RAG system, the minimum similarity score between a question and knowledge base chunks needed before the AI will attempt to answer. |
 | **Inline Keyboard** | Telegram buttons that appear beneath messages. Used for interactive flows like ticket creation, verification, and command shortcuts. |

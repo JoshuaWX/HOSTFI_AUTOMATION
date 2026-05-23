@@ -169,7 +169,7 @@ def _register_conversation_handlers(app: Application) -> None:
 def _register_command_handlers(app: Application) -> None:
     """Register all /command handlers."""
 
-    # M4: /start with referral deep link
+    # M4: /start, broadcasts, polls, and campaign leaderboard
     from bot.handlers.broadcast import (
         leaderboard_command,
         poll_command,
@@ -219,6 +219,31 @@ def _register_command_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("rank", rank_command))
     app.add_handler(CommandHandler("leaderboard", leaderboard_command))
 
+    # Campaign XP
+    from bot.handlers.campaign import (
+        award_command,
+        campaign_command,
+        cycle_command,
+        invite_command,
+        raid_command,
+        raids_command,
+        xlink_command,
+        xpost_command,
+        xp_router_command,
+        xverify_command,
+    )
+
+    app.add_handler(CommandHandler("campaign", campaign_command))
+    app.add_handler(CommandHandler("xp", xp_router_command))
+    app.add_handler(CommandHandler("invite", invite_command))
+    app.add_handler(CommandHandler("xlink", xlink_command))
+    app.add_handler(CommandHandler("xverify", xverify_command))
+    app.add_handler(CommandHandler("raids", raids_command))
+    app.add_handler(CommandHandler("raid", raid_command))
+    app.add_handler(CommandHandler("xpost", xpost_command))
+    app.add_handler(CommandHandler("cycle", cycle_command))
+    app.add_handler(CommandHandler("award", award_command))
+
     # M5: Ticket commands (admin)
     from bot.handlers.tickets import (
         close_command,
@@ -255,6 +280,7 @@ def _register_callback_handlers(app: Application) -> None:
     """Register all inline keyboard callback handlers."""
 
     from bot.handlers.broadcast import broadcast_confirm_callback
+    from bot.handlers.campaign import raid_submit_info_callback
     from bot.handlers.community import (
         help_callback,
         rules_callback,
@@ -281,6 +307,10 @@ def _register_callback_handlers(app: Application) -> None:
         CallbackQueryHandler(
             broadcast_confirm_callback, pattern=r"^broadcast_(confirm|cancel)_"
         )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(raid_submit_info_callback, pattern=r"^raid_submit_info_")
     )
 
     # Ticket claim
