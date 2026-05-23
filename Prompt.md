@@ -190,7 +190,8 @@ X_API_BASE_URL=https://api.x.com/2
 
 # Supabase
 SUPABASE_URL=https://yourproject.supabase.co
-SUPABASE_KEY=your_supabase_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
+SUPABASE_KEY=your_supabase_anon_key_optional_fallback
 
 # Upstash Redis
 UPSTASH_REDIS_URL=rediss://your-upstash-url

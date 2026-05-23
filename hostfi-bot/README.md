@@ -76,7 +76,8 @@ Edit `.env` with your actual credentials. **Detailed instructions for each varia
 | `X_BEARER_TOKEN` | For XP campaign X features | Official X API bearer token | X Developer Portal |
 | `X_API_BASE_URL` | No | X API base URL, defaults to `https://api.x.com/2` | `.env.example` |
 | `SUPABASE_URL` | **Yes** | Supabase project URL | See **Supabase Setup** |
-| `SUPABASE_KEY` | **Yes** | Supabase anon/public key | See **Supabase Setup** |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Yes** | Supabase service role key for this backend bot | See **Supabase Setup** |
+| `SUPABASE_KEY` | Fallback only | Legacy fallback key if service role key is not set | See **Supabase Setup** |
 | `ADMIN_IDS` | No | Extra admin IDs (optional — see below) | See **How Admins Work** |
 | `ADMIN_CHANNEL_ID` | No | Private admin channel ID | See **Getting Telegram IDs** |
 | `UPSTASH_REDIS_URL` | No | Upstash Redis URL | See **Redis Setup** |
@@ -90,8 +91,10 @@ Edit `.env` with your actual credentials. **Detailed instructions for each varia
 2. Go to **SQL Editor** and run the full schema from `database/schema.sql`
 3. To find your credentials: go to **Settings → API**
    - `SUPABASE_URL` = the **Project URL** (looks like `https://xxxx.supabase.co`)
-   - `SUPABASE_KEY` = the **anon public** key (the long `eyJ...` string under "Project API keys")
+   - `SUPABASE_SERVICE_ROLE_KEY` = the **service_role** key
 4. Paste both into your `.env`
+
+> The service role key is server-only. Store it only in Railway Variables or local `.env`; never commit it and never expose it in frontend/client code.
 
 ### 5. Gemini Setup
 
@@ -237,7 +240,7 @@ You don't need everything set up to start testing. Here's the recommended order:
 
 1. **Get your bot token** from BotFather and set `TELEGRAM_BOT_TOKEN`
 2. **Get your user ID** from @userinfobot and set `SUPERADMIN_ID`
-3. **Create Supabase project**, run `schema.sql`, set `SUPABASE_URL` + `SUPABASE_KEY`
+3. **Create Supabase project**, run `schema.sql`, set `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`
 4. **Get Gemini API key** and set `GEMINI_API_KEY`
 5. **Generate webhook secret** and set `TELEGRAM_WEBHOOK_SECRET`
 6. **Set up ngrok** → set `WEBHOOK_URL` to the ngrok URL
@@ -323,7 +326,7 @@ git push -u origin main
    GEMINI_API_KEY=your_gemini_key
    GEMINI_MODEL=gemini-2.5-flash
    SUPABASE_URL=your_supabase_url
-   SUPABASE_KEY=your_supabase_key
+   SUPABASE_SERVICE_ROLE_KEY=your_supabase_service_role_key
    ```
    Optional (add later):
    ```
@@ -338,7 +341,7 @@ git push -u origin main
 7. Go back to **Variables** and set `WEBHOOK_URL` to this Railway domain
 8. Railway will auto-detect the `Procfile` and deploy
 
-> **If Railway shows a build error:** It means you're missing required env vars. The bot needs `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `WEBHOOK_URL`, `SUPERADMIN_ID`, `GEMINI_API_KEY`, `SUPABASE_URL`, and `SUPABASE_KEY` to start. Set them all in the Variables tab and redeploy.
+> **If Railway shows a build error:** It means you're missing required env vars. The bot needs `TELEGRAM_BOT_TOKEN`, `TELEGRAM_WEBHOOK_SECRET`, `WEBHOOK_URL`, `SUPERADMIN_ID`, `GEMINI_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` to start. `SUPABASE_KEY` remains as a legacy fallback only. Set the variables in Railway and redeploy.
 
 ### 3. Verify
 

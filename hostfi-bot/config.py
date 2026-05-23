@@ -161,7 +161,8 @@ EMBEDDING_PROVIDER: str = os.getenv(
 # Supabase
 # ---------------------------------------------------------------------------
 SUPABASE_URL: str = _require_env("SUPABASE_URL")
-SUPABASE_KEY: str = _require_env("SUPABASE_KEY")
+SUPABASE_SERVICE_ROLE_KEY: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+SUPABASE_KEY: str = SUPABASE_SERVICE_ROLE_KEY or _require_env("SUPABASE_KEY")
 
 # ---------------------------------------------------------------------------
 # Upstash Redis (optional — bot works without it, rate limiting is skipped)
