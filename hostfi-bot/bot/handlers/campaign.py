@@ -896,7 +896,7 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             "Usage:\n"
             "<code>/xp add @username AMOUNT</code>\n"
             "<code>/xp deduct @username AMOUNT</code>\n"
-            "<code>/xp disqualify USER_ID reason</code>",
+            "<code>/xp disqualify @username reason</code>",
             parse_mode="HTML",
         )
         return
@@ -936,13 +936,21 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         reason = f"Manual XP {action} by superadmin"
         event_type = "manual_add" if action == "add" else "manual_deduct"
     elif action == "disqualify":
-        try:
-            target_id = int(context.args[1])
-        except ValueError:
-            await update.effective_message.reply_text(status_text("error", "USER_ID must be a number."))
+        username = context.args[1]
+        if not username.startswith("@"):
+            await update.effective_message.reply_text(
+                status_text("error", "Use a Telegram username, like @username.")
+            )
             return
+        user_row = await get_user_by_username(username)
+        if not user_row:
+            await update.effective_message.reply_text(
+                status_text("error", f"{username} is not known to the bot yet. The user must join or message the bot first.")
+            )
+            return
+        target_id = int(user_row["telegram_id"])
         await get_or_create_user(target_id)
-        target_display = f"<code>{target_id}</code>"
+        target_display = f"<b>@{html.escape(str(user_row.get('username') or username).lstrip('@'))}</b>"
         rank_xp, _, _, _ = await get_campaign_rank(target_id)
         signed_amount = -rank_xp
         reason = " ".join(context.args[2:]) or "Disqualified by superadmin"

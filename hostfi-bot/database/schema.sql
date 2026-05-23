@@ -137,8 +137,7 @@ CREATE TABLE IF NOT EXISTS campaign_invite_links (
     chat_id                  BIGINT,
     invite_link              TEXT UNIQUE NOT NULL,
     is_active                BOOLEAN DEFAULT TRUE,
-    created_at               TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (cycle_id, inviter_telegram_id, chat_id)
+    created_at               TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaign_invite_links_inviter
@@ -164,8 +163,7 @@ CREATE TABLE IF NOT EXISTS campaign_invite_joins (
     awarded_at               TIMESTAMPTZ,
     status                   TEXT DEFAULT 'pending'
                                 CHECK (status IN ('pending', 'awarded', 'ineligible')),
-    metadata                 JSONB DEFAULT '{}'::jsonb,
-    UNIQUE (cycle_id, invitee_telegram_id, chat_id)
+    metadata                 JSONB DEFAULT '{}'::jsonb
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaign_invite_joins_pending

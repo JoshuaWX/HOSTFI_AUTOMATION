@@ -503,7 +503,7 @@ async def adminhelp_command(
                 bullet("<code>/award helpful [reason]</code> — Award helpful message"),
                 bullet("<code>/xp add @username AMOUNT</code> — Add XP"),
                 bullet("<code>/xp deduct @username AMOUNT</code> — Deduct XP"),
-                bullet("<code>/xp disqualify USER_ID reason</code> — Disqualify user"),
+                bullet("<code>/xp disqualify @username reason</code> — Disqualify user"),
                 "",
                 title("Tickets"),
                 bullet("<code>/tickets</code> — Active tickets"),
