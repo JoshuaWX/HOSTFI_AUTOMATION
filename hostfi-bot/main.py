@@ -5,6 +5,7 @@ Author: HOSTFI Bot Team
 """
 
 import asyncio
+import html
 import logging
 import signal
 from contextlib import asynccontextmanager
@@ -17,6 +18,7 @@ from bot.application import build_application
 from config import (
     ADMIN_CHANNEL_ID,
     COMMUNITY_GROUP_IDS,
+    PRIMARY_COMMUNITY_GROUP_ID,
     PORT,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_WEBHOOK_SECRET,
@@ -33,6 +35,53 @@ logger = logging.getLogger(__name__)
 
 # Application instance (initialised on startup)
 _bot_app = None
+
+
+async def _check_primary_group_permissions(bot) -> None:
+    """Log/admin-warn when the bot lacks core moderation permissions."""
+    if not PRIMARY_COMMUNITY_GROUP_ID:
+        logger.warning("PRIMARY_COMMUNITY_GROUP_ID is not configured")
+        return
+    try:
+        bot_user = await bot.get_me()
+        member = await bot.get_chat_member(PRIMARY_COMMUNITY_GROUP_ID, bot_user.id)
+    except Exception as exc:
+        logger.warning("Could not check primary community permissions: %s", exc)
+        return
+
+    missing: list[str] = []
+    if member.status != "creator":
+        if member.status != "administrator":
+            missing.extend(["administrator", "restrict members", "delete messages", "invite users"])
+        else:
+            if not getattr(member, "can_restrict_members", False):
+                missing.append("restrict members")
+            if not getattr(member, "can_delete_messages", False):
+                missing.append("delete messages")
+            if not getattr(member, "can_invite_users", False):
+                missing.append("invite users")
+
+    if not missing:
+        logger.info("Primary community permission check passed for %s", PRIMARY_COMMUNITY_GROUP_ID)
+        return
+
+    warning = (
+        "Primary community permission check failed for "
+        f"{PRIMARY_COMMUNITY_GROUP_ID}. Missing: {', '.join(missing)}"
+    )
+    logger.warning(warning)
+    if ADMIN_CHANNEL_ID:
+        try:
+            await bot.send_message(
+                chat_id=ADMIN_CHANNEL_ID,
+                text=(
+                    "⚠️ <b>Permission Warning</b>\n\n"
+                    f"{html.escape(warning)}"
+                ),
+                parse_mode="HTML",
+            )
+        except Exception as exc:
+            logger.warning("Could not send permission warning to admin channel: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -70,6 +119,7 @@ async def lifespan(app: FastAPI):
         BotCommand("campaign", "Current XP campaign"),
         BotCommand("xp", "Your campaign XP"),
         BotCommand("invite", "Your campaign invite link"),
+        BotCommand("invites", "Your invite stats"),
         BotCommand("xlink", "Link your X account"),
         BotCommand("xverify", "Verify your X account"),
         BotCommand("raids", "View active raids"),
@@ -89,6 +139,7 @@ async def lifespan(app: FastAPI):
         BotCommand("ask", "Ask the AI assistant"),
         BotCommand("campaign", "Current XP campaign"),
         BotCommand("invite", "Your campaign invite link"),
+        BotCommand("invites", "Your invite stats"),
         BotCommand("raids", "View active raids"),
         BotCommand("leaderboard", "Community leaderboard"),
     ]
@@ -109,6 +160,7 @@ async def lifespan(app: FastAPI):
             BotCommand("cycle", "Manage campaign cycles"),
             BotCommand("raid", "Create or submit raids"),
             BotCommand("award", "Award helpful XP"),
+            BotCommand("invites", "View invite stats"),
             BotCommand("xp", "Adjust campaign XP"),
             BotCommand("reindex", "Reindex knowledge base"),
             BotCommand("adminhelp", "Admin command reference"),
@@ -156,6 +208,8 @@ async def lifespan(app: FastAPI):
                 logger.error("Could not set group admin commands for chat %s: %s", chat_id, exc)
 
     logger.info("Scoped command menus registered")
+
+    await _check_primary_group_permissions(_bot_app.bot)
 
     setup_scheduler(_bot_app)
 

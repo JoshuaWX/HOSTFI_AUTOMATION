@@ -208,6 +208,19 @@ CREATE TABLE IF NOT EXISTS raids (
 
 CREATE INDEX IF NOT EXISTS idx_raids_cycle_status ON raids (cycle_id, status);
 
+-- Telegram raid announcement messages for expiry cleanup
+CREATE TABLE IF NOT EXISTS raid_messages (
+    id              BIGSERIAL PRIMARY KEY,
+    raid_id          BIGINT NOT NULL REFERENCES raids(id) ON DELETE CASCADE,
+    chat_id          BIGINT NOT NULL,
+    message_id       BIGINT NOT NULL,
+    created_at       TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (raid_id, chat_id, message_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_raid_messages_raid
+    ON raid_messages (raid_id);
+
 -- Raid proof submissions
 CREATE TABLE IF NOT EXISTS raid_submissions (
     id              BIGSERIAL PRIMARY KEY,

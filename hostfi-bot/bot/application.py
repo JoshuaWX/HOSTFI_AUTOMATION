@@ -229,6 +229,7 @@ def _register_command_handlers(app: Application) -> None:
         campaign_command,
         cycle_command,
         invite_command,
+        invites_command,
         raid_command,
         raids_command,
         xlink_command,
@@ -240,6 +241,7 @@ def _register_command_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("campaign", campaign_command))
     app.add_handler(CommandHandler("xp", xp_router_command))
     app.add_handler(CommandHandler("invite", invite_command))
+    app.add_handler(CommandHandler("invites", invites_command))
     app.add_handler(CommandHandler("xlink", xlink_command))
     app.add_handler(CommandHandler("xverify", xverify_command))
     app.add_handler(CommandHandler("raids", raids_command))

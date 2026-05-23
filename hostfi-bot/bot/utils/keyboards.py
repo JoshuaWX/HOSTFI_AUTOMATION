@@ -66,6 +66,9 @@ def campaign_home_keyboard() -> InlineKeyboardMarkup:
             ],
             [
                 InlineKeyboardButton("Invite Link", callback_data="campaign_invite"),
+                InlineKeyboardButton("My Invites", callback_data="campaign_invites"),
+            ],
+            [
                 InlineKeyboardButton("Raids", callback_data="campaign_raids"),
             ],
             [

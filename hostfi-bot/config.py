@@ -112,6 +112,18 @@ COMMUNITY_GROUP_ID_VARIANTS: set[int] = {
     variant for chat_id in COMMUNITY_GROUP_IDS for variant in _id_variants(chat_id)
 }
 COMMUNITY_GROUP_ID_VARIANTS.discard(0)
+_raw_primary_community_group = os.getenv("PRIMARY_COMMUNITY_GROUP_ID", "-1002249459740")
+PRIMARY_COMMUNITY_GROUP_ID: int = (
+    int(_raw_primary_community_group)
+    if _raw_primary_community_group.strip()
+    else COMMUNITY_GROUP_ID
+)
+INVITE_RETENTION_HOURS: int = int(os.getenv("INVITE_RETENTION_HOURS", "5"))
+if INVITE_RETENTION_HOURS < 1:
+    print("FATAL: INVITE_RETENTION_HOURS must be at least 1", file=sys.stderr)
+    sys.exit(1)
+if PRIMARY_COMMUNITY_GROUP_ID:
+    COMMUNITY_GROUP_ID_VARIANTS.update(_id_variants(PRIMARY_COMMUNITY_GROUP_ID))
 
 
 def is_community_group_chat(chat_id: int | None) -> bool:
@@ -127,6 +139,11 @@ def get_community_group_ids() -> list[int]:
 def get_primary_community_group_id(chat_id: int | None = None) -> int:
     """Use the current group when configured; otherwise fall back to the first group."""
     return chat_id if is_community_group_chat(chat_id) else COMMUNITY_GROUP_ID
+
+
+def get_invite_target_group_id() -> int:
+    """Return the configured group where campaign referral links must point."""
+    return PRIMARY_COMMUNITY_GROUP_ID
 
 # ---------------------------------------------------------------------------
 # Gemini AI

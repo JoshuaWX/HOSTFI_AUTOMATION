@@ -205,6 +205,7 @@ When users type `/` in the chat, Telegram shows a command menu. **Only register 
    campaign - Current XP campaign
    xp - Your campaign XP
    invite - Get your campaign invite link
+   invites - View invite stats
    xlink - Link your X account
    xverify - Verify your X account
    raids - Active HostFi raids
@@ -436,7 +437,8 @@ hostfi-bot/
 | `/support` | Open support ticket |
 | `/campaign` | Current XP campaign rules and status |
 | `/xp` | Your current campaign XP |
-| `/invite` | Generate your campaign invite link |
+| `/invite` | DM your campaign invite link |
+| `/invites` | View invite stats |
 | `/xlink @handle` | Start X account verification |
 | `/xverify [url]` | Verify your X account |
 | `/raids` | View active X raids |
@@ -459,7 +461,7 @@ hostfi-bot/
 | `/broadcast` | Broadcast to community |
 | `/poll` | Create a poll |
 | `/cycle start\|finish` | Start or finish campaign cycle |
-| `/raid create [url] [hours]` | Create approved X raid |
+| `/raid create [url] [minutes]` | Create approved X raid |
 | `/award helpful [reason]` | Award helpful contribution XP |
 | `/xp add\|deduct\|disqualify` | Superadmin XP controls |
 | `/tickets` | View active tickets |

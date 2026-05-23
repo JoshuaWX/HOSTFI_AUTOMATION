@@ -9,6 +9,7 @@ import logging
 from datetime import datetime, timedelta, timezone
 from typing import Any
 
+from config import INVITE_RETENTION_HOURS
 from database.client import get_supabase_client
 
 logger = logging.getLogger(__name__)
@@ -489,18 +490,22 @@ async def record_invite_join(invite_link: str, invitee_telegram_id: int) -> dict
         if int(link_row["inviter_telegram_id"]) == int(invitee_telegram_id):
             return None
 
-        existing = (
+        existing_query = (
             client.table("campaign_invite_joins")
             .select("*")
             .eq("cycle_id", link_row["cycle_id"])
             .eq("invitee_telegram_id", invitee_telegram_id)
-            .limit(1)
-            .execute()
         )
+        if link_row.get("chat_id") is None:
+            existing_query = existing_query.is_("chat_id", "null")
+        else:
+            existing_query = existing_query.eq("chat_id", link_row.get("chat_id"))
+        existing = existing_query.limit(1).execute()
         if existing.data:
             return existing.data[0]
 
         joined_at = _now()
+        eligible_at = joined_at + timedelta(hours=INVITE_RETENTION_HOURS)
         created = (
             client.table("campaign_invite_joins")
             .insert(
@@ -511,7 +516,7 @@ async def record_invite_join(invite_link: str, invitee_telegram_id: int) -> dict
                     "chat_id": link_row.get("chat_id"),
                     "invite_link": invite_link,
                     "joined_at": _iso(joined_at),
-                    "eligible_at": _iso(joined_at + timedelta(hours=48)),
+                    "eligible_at": _iso(eligible_at),
                     "status": "pending",
                 }
             )
@@ -527,7 +532,7 @@ async def record_invite_join(invite_link: str, invitee_telegram_id: int) -> dict
 
 
 async def get_pending_invite_joins() -> list[dict]:
-    """Return invite joins ready for 48-hour retention checks."""
+    """Return invite joins ready for retention checks."""
 
     def _op() -> list[dict]:
         client = get_supabase_client()
@@ -561,6 +566,86 @@ async def mark_invite_join(join_id: int, status: str, awarded: bool = False) -> 
         await asyncio.to_thread(_op)
     except Exception as exc:
         logger.error("Failed to mark invite join %s: %s", join_id, exc)
+
+
+async def get_invite_stats(telegram_id: int, cycle_id: int | None = None) -> dict | None:
+    """Return invite counts and XP earned for a user in the active/current cycle."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        if cycle_id is None:
+            cycle_result = (
+                client.table("campaign_cycles")
+                .select("*")
+                .eq("status", "active")
+                .order("start_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            if not cycle_result.data:
+                return None
+            cycle = cycle_result.data[0]
+        else:
+            cycle_result = (
+                client.table("campaign_cycles")
+                .select("*")
+                .eq("id", cycle_id)
+                .limit(1)
+                .execute()
+            )
+            if not cycle_result.data:
+                return None
+            cycle = cycle_result.data[0]
+
+        joins = (
+            client.table("campaign_invite_joins")
+            .select("status")
+            .eq("cycle_id", cycle["id"])
+            .eq("inviter_telegram_id", telegram_id)
+            .execute()
+        )
+        counts = {"pending": 0, "awarded": 0, "ineligible": 0}
+        for row in joins.data or []:
+            status = row.get("status")
+            if status in counts:
+                counts[status] += 1
+
+        events = (
+            client.table("xp_events")
+            .select("amount")
+            .eq("cycle_id", cycle["id"])
+            .eq("telegram_id", telegram_id)
+            .eq("event_type", "telegram_invite")
+            .eq("status", "approved")
+            .execute()
+        )
+        invite_xp = sum(int(row.get("amount") or 0) for row in events.data or [])
+
+        link = (
+            client.table("campaign_invite_links")
+            .select("*")
+            .eq("cycle_id", cycle["id"])
+            .eq("inviter_telegram_id", telegram_id)
+            .eq("is_active", True)
+            .order("created_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+
+        return {
+            "cycle": cycle,
+            "pending": counts["pending"],
+            "awarded": counts["awarded"],
+            "ineligible": counts["ineligible"],
+            "invite_xp": invite_xp,
+            "invite_link": link.data[0].get("invite_link") if link.data else None,
+        }
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to get invite stats for %s: %s", telegram_id, exc)
+        return None
 
 
 async def create_x_verification(telegram_id: int, username: str, code: str) -> dict | None:
@@ -697,6 +782,7 @@ async def get_active_raids() -> list[dict]:
             .select("*")
             .eq("cycle_id", cycle.data[0]["id"])
             .eq("status", "active")
+            .gt("deadline_at", _iso(_now()))
             .order("created_at", desc=True)
             .execute()
         )
@@ -722,6 +808,79 @@ async def get_raid(raid_id: int) -> dict | None:
     except Exception as exc:
         logger.error("Failed to get raid %s: %s", raid_id, exc)
         return None
+
+
+async def record_raid_message(raid_id: int, chat_id: int, message_id: int) -> dict | None:
+    """Store a Telegram raid announcement message for expiry cleanup."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        result = (
+            client.table("raid_messages")
+            .insert({"raid_id": raid_id, "chat_id": chat_id, "message_id": message_id})
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to record raid message for raid %s: %s", raid_id, exc)
+        return None
+
+
+async def get_expired_active_raids() -> list[dict]:
+    """Return active raids whose deadline has passed."""
+
+    def _op() -> list[dict]:
+        client = get_supabase_client()
+        result = (
+            client.table("raids")
+            .select("*")
+            .eq("status", "active")
+            .lte("deadline_at", _iso(_now()))
+            .execute()
+        )
+        return result.data or []
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to fetch expired raids: %s", exc)
+        return []
+
+
+async def close_raid(raid_id: int) -> None:
+    """Mark a raid as closed."""
+
+    def _op() -> None:
+        client = get_supabase_client()
+        client.table("raids").update({"status": "closed"}).eq("id", raid_id).execute()
+
+    try:
+        await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to close raid %s: %s", raid_id, exc)
+
+
+async def get_raid_messages(raid_id: int) -> list[dict]:
+    """Return stored Telegram messages for a raid announcement."""
+
+    def _op() -> list[dict]:
+        client = get_supabase_client()
+        result = (
+            client.table("raid_messages")
+            .select("*")
+            .eq("raid_id", raid_id)
+            .execute()
+        )
+        return result.data or []
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to fetch raid messages for raid %s: %s", raid_id, exc)
+        return []
 
 
 async def has_raid_submission(raid_id: int, telegram_id: int) -> bool:

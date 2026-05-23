@@ -7,7 +7,7 @@ Author: HOSTFI Bot Team
 
 import logging
 
-from telegram import Message
+from telegram import Message, Update
 from telegram.ext import ContextTypes
 
 from config import is_community_group_chat
@@ -73,3 +73,36 @@ async def schedule_error_delete(
         data={"chat_id": message.chat_id, "message_id": message.message_id},
         name=f"error_delete_{message.message_id}",
     )
+
+
+async def schedule_any_delete(
+    message: Message,
+    context: ContextTypes.DEFAULT_TYPE,
+    delay: int,
+) -> None:
+    """
+    Schedule a bot message for cleanup in any group/supergroup chat.
+
+    DMs are left untouched so users do not lose private reference info.
+    """
+    if message.chat.type not in ("group", "supergroup"):
+        return
+
+    context.job_queue.run_once(
+        _delete_message_job,
+        when=delay,
+        data={"chat_id": message.chat_id, "message_id": message.message_id},
+        name=f"auto_delete_any_{message.message_id}",
+    )
+
+
+async def schedule_command_delete(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    delay: int,
+) -> None:
+    """Schedule the user's command message for cleanup in group chats."""
+    message = update.message
+    if not message:
+        return
+    await schedule_any_delete(message, context, delay)

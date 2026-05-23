@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from telegram import LinkPreviewOptions, Message, Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
+from bot.utils.auto_delete import schedule_any_delete, schedule_command_delete, schedule_delete
 from bot.utils.formatter import bullet, field, status_text, title
 from bot.utils.keyboards import (
     campaign_cancel_keyboard,
@@ -30,13 +31,18 @@ from bot.utils.x_api import (
     mentions_hostfi,
     parse_x_post_url,
 )
-from config import COMMUNITY_GROUP_IDS, get_primary_community_group_id
+from config import (
+    COMMUNITY_GROUP_IDS,
+    INVITE_RETENTION_HOURS,
+    get_invite_target_group_id,
+)
 from database.campaign import (
     XP_HELPFUL,
     XP_INVITE,
     XP_RAID,
     XP_X_POST,
     award_xp,
+    close_raid,
     create_raid,
     create_x_verification,
     finish_cycle,
@@ -44,15 +50,19 @@ from database.campaign import (
     get_active_raids,
     get_campaign_leaderboard,
     get_campaign_rank,
+    get_expired_active_raids,
+    get_invite_stats,
     get_or_create_invite_link_record,
     get_pending_invite_joins,
     get_raid,
+    get_raid_messages,
     get_x_account,
     has_daily_x_post,
     has_raid_submission,
     is_disqualified,
     mark_invite_join,
     record_invite_join,
+    record_raid_message,
     record_raid_submission,
     record_x_post_submission,
     start_cycle,
@@ -104,9 +114,8 @@ def _x_missing() -> str:
 
 
 def _target_community_group_id(update: Update) -> int:
-    """Return the current configured group, or the primary group for DM/admin flows."""
-    chat_id = update.effective_chat.id if update.effective_chat else None
-    return get_primary_community_group_id(chat_id)
+    """Return the configured group where campaign referral links must point."""
+    return get_invite_target_group_id()
 
 
 async def _send_to_community_groups(bot, **kwargs) -> int:
@@ -116,6 +125,11 @@ async def _send_to_community_groups(bot, **kwargs) -> int:
         await bot.send_message(chat_id=chat_id, **kwargs)
         sent += 1
     return sent
+
+
+def _retention_label() -> str:
+    """Return a short label for invite XP retention copy."""
+    return f"{INVITE_RETENTION_HOURS} hour" + ("" if INVITE_RETENTION_HOURS == 1 else "s")
 
 
 async def _ensure_user(update: Update) -> int | None:
@@ -140,7 +154,7 @@ def _campaign_home_text(cycle: dict) -> str:
         + "\n"
         + bullet(f"Raids on X — <b>{XP_RAID} XP</b>")
         + "\n"
-        + bullet(f"Telegram invites after 48h — <b>{XP_INVITE} XP</b>")
+        + bullet(f"Telegram invites after {_retention_label()} — <b>{XP_INVITE} XP</b>")
         + "\n"
         + bullet(f"Helpful contributions — <b>{XP_HELPFUL} XP</b>")
         + "\n"
@@ -149,28 +163,41 @@ def _campaign_home_text(cycle: dict) -> str:
     )
 
 
-async def _send_campaign_home(message: Message) -> None:
+async def _send_campaign_home(
+    message: Message,
+    context: ContextTypes.DEFAULT_TYPE | None = None,
+) -> None:
     """Send the campaign hub to a Telegram message target."""
     cycle = await get_active_cycle()
     if not cycle:
-        await message.reply_text(_campaign_missing(), parse_mode="HTML")
+        reply = await message.reply_text(_campaign_missing(), parse_mode="HTML")
+        if context:
+            await schedule_delete(reply, context, 60)
         return
-    await message.reply_text(
+    reply = await message.reply_text(
         _campaign_home_text(cycle),
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
+    if context:
+        await schedule_delete(reply, context, 60)
 
 
-async def _send_xp_status(message: Message, user_id: int) -> None:
+async def _send_xp_status(
+    message: Message,
+    user_id: int,
+    context: ContextTypes.DEFAULT_TYPE | None = None,
+) -> None:
     """Send campaign XP status for a user."""
     xp, rank, total, cycle = await get_campaign_rank(user_id)
     if not cycle:
-        await message.reply_text(_campaign_missing(), parse_mode="HTML")
+        reply = await message.reply_text(_campaign_missing(), parse_mode="HTML")
+        if context:
+            await schedule_delete(reply, context, 60)
         return
 
     rank_text = f"#{rank} of {total}" if rank else "Not ranked yet"
-    await message.reply_text(
+    reply = await message.reply_text(
         "\n".join(
             [
                 title("Your Campaign XP", "⭐"),
@@ -183,16 +210,23 @@ async def _send_xp_status(message: Message, user_id: int) -> None:
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
+    if context:
+        await schedule_delete(reply, context, 60)
 
 
-async def _send_campaign_leaderboard(message: Message) -> None:
+async def _send_campaign_leaderboard(
+    message: Message,
+    context: ContextTypes.DEFAULT_TYPE | None = None,
+) -> None:
     """Send the current campaign leaderboard."""
     top_users = await get_campaign_leaderboard(10)
     if not top_users:
-        await message.reply_text(
+        reply = await message.reply_text(
             status_text("info", "No campaign leaderboard data yet."),
             reply_markup=campaign_home_keyboard(),
         )
+        if context:
+            await schedule_delete(reply, context, 60)
         return
 
     lines = [title("XP Leaderboard", "🏅"), ""]
@@ -200,11 +234,13 @@ async def _send_campaign_leaderboard(message: Message) -> None:
         lines.append(f"{index}. <b>{_display_user(row)}</b> — {row.get('xp', 0):,} XP")
     lines.append("")
     lines.append("Ties are ranked by earliest approved XP event.")
-    await message.reply_text(
+    reply = await message.reply_text(
         "\n".join(lines),
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
+    if context:
+        await schedule_delete(reply, context, 60)
 
 
 def _set_pending(context: ContextTypes.DEFAULT_TYPE, payload: dict) -> None:
@@ -524,7 +560,8 @@ async def campaign_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Show current campaign status and earning rules."""
     if not update.effective_message:
         return
-    await _send_campaign_home(update.effective_message)
+    await _send_campaign_home(update.effective_message, context)
+    await schedule_command_delete(update, context, 60)
 
 
 async def xp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -533,7 +570,8 @@ async def xp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not user_id or not update.effective_message:
         return
 
-    await _send_xp_status(update.effective_message, user_id)
+    await _send_xp_status(update.effective_message, user_id, context)
+    await schedule_command_delete(update, context, 60)
 
 
 async def xp_router_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -542,6 +580,60 @@ async def xp_router_command(update: Update, context: ContextTypes.DEFAULT_TYPE) 
         await xp_admin_command(update, context)
         return
     await xp_command(update, context)
+
+
+async def _get_or_create_primary_invite_link(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    user_id: int,
+    cycle: dict,
+) -> tuple[str | None, str | None]:
+    """Return a stable invite link for the primary campaign group."""
+    target_chat_id = _target_community_group_id(update)
+    if not target_chat_id:
+        return None, "No community group is configured."
+
+    existing = await get_or_create_invite_link_record(cycle["id"], user_id, chat_id=target_chat_id)
+    if existing and existing.get("invite_link"):
+        return existing["invite_link"], None
+
+    try:
+        invite = await context.bot.create_chat_invite_link(
+            chat_id=target_chat_id,
+            name=f"xp-{cycle['id']}-{user_id}",
+            creates_join_request=False,
+        )
+    except Exception as exc:
+        logger.error("Failed to create campaign invite link: %s", exc)
+        return None, "Could not create your invite link. Make sure the bot can invite users."
+
+    record = await get_or_create_invite_link_record(
+        cycle["id"],
+        user_id,
+        invite.invite_link,
+        chat_id=target_chat_id,
+    )
+    if not record:
+        try:
+            await context.bot.revoke_chat_invite_link(target_chat_id, invite.invite_link)
+        except Exception as exc:
+            logger.warning("Failed to revoke unsaved campaign invite link: %s", exc)
+        return None, "Could not save your invite link. Please try again."
+
+    return record["invite_link"], None
+
+
+def _invite_link_text(link: str, cycle: dict) -> str:
+    """Build invite-link message text."""
+    cycle_number = html.escape(str(cycle.get("cycle_number") or cycle.get("id") or "Active"))
+    return (
+        f"{title('Campaign Invite Link', '👥')}\n\n"
+        f"<code>{html.escape(link)}</code>\n\n"
+        f"{field('Cycle', f'<b>#{cycle_number}</b>')}\n"
+        f"{field('Reward', f'<b>{XP_INVITE} XP</b>')}\n"
+        f"{field('Retention', f'<b>{_retention_label()}</b>')}\n\n"
+        "XP is awarded after the invited user stays in the community for the full retention window."
+    )
 
 
 async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -559,52 +651,111 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
         return
 
-    target_chat_id = _target_community_group_id(update)
-    if not target_chat_id:
-        await update.effective_message.reply_text(status_text("error", "No community group is configured."))
+    link, error = await _get_or_create_primary_invite_link(update, context, user_id, cycle)
+    if error or not link:
+        reply = await update.effective_message.reply_text(status_text("error", error or "Could not create your invite link."))
+        await schedule_delete(reply, context, 60)
         return
 
-    existing = await get_or_create_invite_link_record(cycle["id"], user_id, chat_id=target_chat_id)
-    if existing and existing.get("invite_link"):
-        link = existing["invite_link"]
-    else:
-        try:
-            invite = await context.bot.create_chat_invite_link(
-                chat_id=target_chat_id,
-                name=f"xp-{cycle['id']}-{user_id}",
-                creates_join_request=False,
-            )
-        except Exception as exc:
-            logger.error("Failed to create campaign invite link: %s", exc)
-            await update.effective_message.reply_text(
-                status_text("error", "Could not create your invite link. Make sure the bot can invite users.")
-            )
-            return
-        record = await get_or_create_invite_link_record(
-            cycle["id"],
-            user_id,
-            invite.invite_link,
-            chat_id=target_chat_id,
+    invite_text = _invite_link_text(link, cycle)
+    chat = update.effective_chat
+    if chat and chat.type == "private":
+        await update.effective_message.reply_text(
+            invite_text,
+            parse_mode="HTML",
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        if not record:
-            try:
-                await context.bot.revoke_chat_invite_link(target_chat_id, invite.invite_link)
-            except Exception as exc:
-                logger.warning("Failed to revoke unsaved campaign invite link: %s", exc)
-            await update.effective_message.reply_text(
-                status_text("error", "Could not save your invite link. Please try again.")
-            )
-            return
-        link = record["invite_link"]
+        return
 
-    await update.effective_message.reply_text(
-        f"{title('Campaign Invite Link', '👥')}\n\n"
-        f"<code>{html.escape(link)}</code>\n\n"
-        f"{field('Reward', f'<b>{XP_INVITE} XP</b>')}\n"
-        "XP is awarded after the invited user stays in the group for 48 hours.",
+    try:
+        await context.bot.send_message(
+            chat_id=user_id,
+            text=invite_text,
+            parse_mode="HTML",
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+        reply = await update.effective_message.reply_text(status_text("success", "Invite link sent in DM."))
+        await schedule_any_delete(reply, context, 30)
+    except Exception as exc:
+        logger.warning("Could not DM invite link to %s: %s", user_id, exc)
+        reply = await update.effective_message.reply_text(
+            invite_text,
+            parse_mode="HTML",
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+        await schedule_delete(reply, context, 60)
+    await schedule_command_delete(update, context, 30)
+
+
+async def invites_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Show invite stats for the caller or, for admins, a known username."""
+    user_id = await _ensure_user(update)
+    if not user_id or not update.effective_message:
+        return
+
+    target_id = user_id
+    target_label = "Your Invites"
+    args = [] if update.callback_query else (getattr(context, "args", None) or [])
+    if args:
+        if not await is_admin(user_id, bot=context.bot):
+            reply = await update.effective_message.reply_text(status_text("error", "Admins only."))
+            await schedule_any_delete(reply, context, 30)
+            return
+        username = args[0]
+        if not username.startswith("@"):
+            reply = await update.effective_message.reply_text(status_text("error", "Use a Telegram username, like @username."))
+            await schedule_any_delete(reply, context, 30)
+            return
+        user_row = await get_user_by_username(username)
+        if not user_row:
+            reply = await update.effective_message.reply_text(
+                status_text("error", f"{html.escape(username)} is not known to the bot yet.")
+            )
+            await schedule_any_delete(reply, context, 30)
+            return
+        target_id = int(user_row["telegram_id"])
+        target_label = f"Invites · @{html.escape(str(user_row.get('username') or username).lstrip('@'))}"
+
+    cycle = await get_active_cycle()
+    if not cycle:
+        reply = await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
+        await schedule_delete(reply, context, 60)
+        return
+
+    link, error = await _get_or_create_primary_invite_link(update, context, target_id, cycle)
+    if error:
+        reply = await update.effective_message.reply_text(status_text("error", error))
+        await schedule_delete(reply, context, 60)
+        return
+
+    stats = await get_invite_stats(target_id, cycle["id"])
+    if not stats:
+        reply = await update.effective_message.reply_text(status_text("error", "Could not load invite stats."))
+        await schedule_delete(reply, context, 60)
+        return
+
+    text = "\n".join(
+        [
+            title(target_label, "👥"),
+            "",
+            field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>"),
+            field("Pending", f"<b>{stats.get('pending', 0)}</b>"),
+            field("Confirmed", f"<b>{stats.get('awarded', 0)}</b>"),
+            field("Ineligible", f"<b>{stats.get('ineligible', 0)}</b>"),
+            field("Invite XP", f"<b>{stats.get('invite_xp', 0):,}</b>"),
+            field("Retention", f"<b>{_retention_label()}</b>"),
+            "",
+            f"<code>{html.escape(link or stats.get('invite_link') or '')}</code>",
+        ]
+    )
+    reply = await update.effective_message.reply_text(
+        text,
         parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
+    await schedule_delete(reply, context, 60)
+    await schedule_command_delete(update, context, 60)
 
 
 async def xlink_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -639,10 +790,12 @@ async def raids_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
     raids = await get_active_raids()
     if not raids:
-        await update.effective_message.reply_text(status_text("info", "No active raids right now."))
+        reply = await update.effective_message.reply_text(status_text("info", "No active raids right now."))
+        await schedule_delete(reply, context, 60)
         return
 
-    await update.effective_message.reply_text(title("Active HostFi Raids", "🚀"), parse_mode="HTML")
+    header = await update.effective_message.reply_text(title("Active HostFi Raids", "🚀"), parse_mode="HTML")
+    await schedule_delete(header, context, 60)
     for raid in raids:
         deadline = _parse_iso(raid.get("deadline_at"))
         deadline_text = deadline.strftime("%Y-%m-%d %H:%M UTC") if deadline else "No deadline"
@@ -653,12 +806,14 @@ async def raids_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"{html.escape(raid.get('target_url') or '')}\n"
             "Use the buttons below to open the post or submit proof."
         )
-        await update.effective_message.reply_text(
+        reply = await update.effective_message.reply_text(
             text,
             parse_mode="HTML",
             reply_markup=campaign_raid_keyboard(raid["id"], raid.get("target_url") or ""),
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
+        await schedule_delete(reply, context, 60)
+    await schedule_command_delete(update, context, 60)
 
 
 async def raid_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -667,7 +822,7 @@ async def raid_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     if not context.args:
         await update.effective_message.reply_text(
-            "Usage:\n<code>/raid create X_POST_URL [deadline_hours]</code>\n"
+            "Usage:\n<code>/raid create X_POST_URL [deadline_minutes]</code>\n"
             "<code>/raid submit RAID_ID YOUR_X_PROOF_URL</code>",
             parse_mode="HTML",
         )
@@ -689,7 +844,7 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     if len(context.args) < 2:
         await update.effective_message.reply_text(
-            "Usage: <code>/raid create X_POST_URL [deadline_hours]</code>", parse_mode="HTML"
+            "Usage: <code>/raid create X_POST_URL [deadline_minutes]</code>", parse_mode="HTML"
         )
         return
 
@@ -704,11 +859,11 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
 
     try:
-        deadline_hours = int(context.args[2]) if len(context.args) > 2 else 48
-        if deadline_hours < 1 or deadline_hours > 336:
+        deadline_minutes = int(context.args[2]) if len(context.args) > 2 else 60
+        if deadline_minutes < 5 or deadline_minutes > 10080:
             raise ValueError
     except ValueError:
-        await update.effective_message.reply_text(status_text("error", "Deadline must be between 1 and 336 hours."))
+        await update.effective_message.reply_text(status_text("error", "Deadline must be between 5 and 10080 minutes."))
         return
 
     raid = await create_raid(
@@ -716,7 +871,7 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         created_by=update.effective_user.id,
         target_post_id=parsed[1],
         target_url=context.args[1],
-        deadline_at=_utc_now() + timedelta(hours=deadline_hours),
+        deadline_at=_utc_now() + timedelta(minutes=deadline_minutes),
     )
     if not raid:
         await update.effective_message.reply_text(status_text("error", "Could not create raid."))
@@ -727,21 +882,31 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         f"{raid_title}\n\n"
         f"{html.escape(context.args[1])}\n\n"
         f"{field('Reward', f'<b>{XP_RAID} XP</b>')}\n"
-        f"{field('Deadline', f'<b>{deadline_hours} hours</b>')}\n\n"
+        f"{field('Deadline', f'<b>{deadline_minutes} minutes</b>')}\n\n"
         "Use the buttons below to participate."
     )
-    await _send_to_community_groups(
-        context.bot,
-        text=text,
-        parse_mode="HTML",
-        reply_markup=campaign_raid_keyboard(raid["id"], context.args[1]),
-        link_preview_options=LinkPreviewOptions(is_disabled=True),
+    posted = 0
+    for chat_id in COMMUNITY_GROUP_IDS:
+        try:
+            sent = await context.bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=campaign_raid_keyboard(raid["id"], context.args[1]),
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
+            )
+            posted += 1
+            await record_raid_message(raid["id"], chat_id, sent.message_id)
+        except Exception as exc:
+            logger.warning("Could not post raid %s to %s: %s", raid["id"], chat_id, exc)
+    reply = await update.effective_message.reply_text(
+        status_text("success", f"Raid #{raid['id']} created and posted to {posted} group(s).")
     )
-    await update.effective_message.reply_text(status_text("success", f"Raid #{raid['id']} created and posted."))
+    await schedule_any_delete(reply, context, 30)
     await log_action(
         "raid_created",
         update.effective_user.id,
-        metadata={"raid_id": raid["id"], "target_post_id": parsed[1]},
+        metadata={"raid_id": raid["id"], "target_post_id": parsed[1], "deadline_minutes": deadline_minutes},
     )
 
 
@@ -1003,24 +1168,29 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
     if data == "campaign_cancel":
         _clear_pending(context)
-        await query.message.reply_text("Cancelled.", reply_markup=campaign_home_keyboard())
+        reply = await query.message.reply_text("Cancelled.", reply_markup=campaign_home_keyboard())
+        await schedule_delete(reply, context, 60)
         return
 
     if data == "campaign_home":
-        await _send_campaign_home(query.message)
+        await _send_campaign_home(query.message, context)
         return
 
     if data == "campaign_xp":
         await get_or_create_user(query.from_user.id, query.from_user.username, query.from_user.first_name)
-        await _send_xp_status(query.message, query.from_user.id)
+        await _send_xp_status(query.message, query.from_user.id, context)
         return
 
     if data == "campaign_leaderboard":
-        await _send_campaign_leaderboard(query.message)
+        await _send_campaign_leaderboard(query.message, context)
         return
 
     if data == "campaign_invite":
         await invite_command(update, context)
+        return
+
+    if data == "campaign_invites":
+        await invites_command(update, context)
         return
 
     if data == "campaign_raids":
@@ -1029,27 +1199,30 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
     if data == "campaign_xlink_start":
         _set_pending(context, {"type": "xlink_handle", "chat_id": query.message.chat_id})
-        await query.message.reply_text(
+        reply = await query.message.reply_text(
             "Send your X handle now, like <code>@yourhandle</code>.",
             parse_mode="HTML",
             reply_markup=campaign_cancel_keyboard(),
         )
+        await schedule_delete(reply, context, 60)
         return
 
     if data == "campaign_xverify_start":
         _set_pending(context, {"type": "xverify", "chat_id": query.message.chat_id})
-        await query.message.reply_text(
+        reply = await query.message.reply_text(
             "Send the X post URL that contains your verification code.",
             reply_markup=campaign_cancel_keyboard(),
         )
+        await schedule_delete(reply, context, 60)
         return
 
     if data == "campaign_xpost_start":
         _set_pending(context, {"type": "xpost", "chat_id": query.message.chat_id})
-        await query.message.reply_text(
+        reply = await query.message.reply_text(
             "Send your HostFi-related X post URL.",
             reply_markup=campaign_cancel_keyboard(),
         )
+        await schedule_delete(reply, context, 60)
         return
 
     if data.startswith("campaign_raid_submit_"):
@@ -1059,16 +1232,17 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
             await query.message.reply_text(status_text("error", "Invalid raid button."))
             return
         _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.message.chat_id})
-        await query.message.reply_text(
+        reply = await query.message.reply_text(
             f"Send your X proof URL for <b>Raid #{raid_id}</b>.",
             parse_mode="HTML",
             reply_markup=campaign_cancel_keyboard(),
         )
+        await schedule_delete(reply, context, 60)
         return
 
     if data.startswith("campaign_raid_help_"):
         raid_id = html.escape(data.rsplit("_", 1)[-1])
-        await query.message.reply_text(
+        reply = await query.message.reply_text(
             f"To earn raid XP:\n"
             f"1. Open the approved X post.\n"
             f"2. Reply or quote it from your linked X account.\n"
@@ -1076,6 +1250,7 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
             f"Fallback command:\n<code>/raid submit {raid_id} YOUR_X_PROOF_URL</code>",
             parse_mode="HTML",
         )
+        await schedule_delete(reply, context, 60)
 
 
 async def raid_submit_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -1129,7 +1304,7 @@ async def campaign_guided_input_handler(update: Update, context: ContextTypes.DE
 
 
 async def process_invite_awards(bot) -> int:
-    """Award invite XP for users who stayed in the group for 48 hours."""
+    """Award invite XP for users who stayed in the group for the retention window."""
     pending = await get_pending_invite_joins()
     active_cycle = await get_active_cycle()
     awarded = 0
@@ -1143,7 +1318,7 @@ async def process_invite_awards(bot) -> int:
             await mark_invite_join(join["id"], "ineligible")
             continue
         try:
-            member = await bot.get_chat_member(int(join.get("chat_id") or get_primary_community_group_id()), invitee)
+            member = await bot.get_chat_member(int(join.get("chat_id") or get_invite_target_group_id()), invitee)
             if member.status in ("left", "kicked"):
                 await mark_invite_join(join["id"], "ineligible")
                 continue
@@ -1155,7 +1330,7 @@ async def process_invite_awards(bot) -> int:
             inviter,
             XP_INVITE,
             "telegram_invite",
-            "Invitee stayed in Telegram group for 48 hours",
+            f"Invitee stayed in Telegram group for {_retention_label()}",
             external_id=str(invitee),
             metadata={"invitee_telegram_id": invitee, "join_id": join["id"]},
             cycle_id=join["cycle_id"],
@@ -1172,6 +1347,31 @@ async def process_invite_awards(bot) -> int:
             except Exception:
                 pass
     return awarded
+
+
+async def process_expired_raids(bot) -> int:
+    """Close expired raids and delete their stored announcement messages."""
+    expired = await get_expired_active_raids()
+    closed = 0
+    for raid in expired:
+        raid_id = int(raid["id"])
+        await close_raid(raid_id)
+        closed += 1
+        for message in await get_raid_messages(raid_id):
+            try:
+                await bot.delete_message(
+                    chat_id=int(message["chat_id"]),
+                    message_id=int(message["message_id"]),
+                )
+            except Exception as exc:
+                logger.info(
+                    "Could not delete expired raid message raid=%s chat=%s message=%s: %s",
+                    raid_id,
+                    message.get("chat_id"),
+                    message.get("message_id"),
+                    exc,
+                )
+    return closed
 
 
 async def record_new_member_invite(update: Update) -> None:
