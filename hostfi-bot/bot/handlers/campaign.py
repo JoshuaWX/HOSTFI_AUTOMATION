@@ -9,14 +9,19 @@ import logging
 import secrets
 from datetime import datetime, timedelta, timezone
 
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update
-from telegram.ext import ContextTypes
+from telegram import LinkPreviewOptions, Message, Update
+from telegram.ext import ApplicationHandlerStop, ContextTypes
 
+from bot.utils.keyboards import (
+    campaign_cancel_keyboard,
+    campaign_home_keyboard,
+    campaign_raid_keyboard,
+    campaign_xverify_keyboard,
+)
 from bot.utils.permissions import is_admin, is_admin_channel_chat, is_superadmin
 from bot.utils.rate_limiter import check_rate_limit
 from bot.utils.x_api import (
     XApiNotConfigured,
-    canonical_x_url,
     fetch_post,
     is_meaningful_x_text,
     is_reply_or_quote_to,
@@ -56,6 +61,8 @@ from database.logs import log_action
 from database.users import get_or_create_user
 
 logger = logging.getLogger(__name__)
+
+PENDING_ACTION_KEY = "campaign_pending_action"
 
 
 def _utc_now() -> datetime:
@@ -119,6 +126,380 @@ async def _ensure_user(update: Update) -> int | None:
     return user.id
 
 
+def _campaign_home_text(cycle: dict) -> str:
+    """Build the main campaign hub text."""
+    end_at = _parse_iso(cycle.get("end_at"))
+    ends = end_at.strftime("%Y-%m-%d %H:%M UTC") if end_at else "Manual finish"
+    return (
+        f"🏆 <b>HostFi XP Campaign — Cycle #{cycle.get('cycle_number')}</b>\n"
+        "━━━━━━━━━━━━━━━━━━\n\n"
+        f"Ends: <b>{ends}</b>\n\n"
+        "<b>Earn XP:</b>\n"
+        f"• Raids on X: <b>{XP_RAID} XP</b>\n"
+        f"• Telegram invites after 48h: <b>{XP_INVITE} XP</b>\n"
+        f"• Helpful contributions: <b>{XP_HELPFUL} XP</b>\n"
+        f"• Approved HostFi X posts: <b>{XP_X_POST} XP</b> (1/day)\n\n"
+        "Use the buttons below to manage your campaign activity."
+    )
+
+
+async def _send_campaign_home(message: Message) -> None:
+    """Send the campaign hub to a Telegram message target."""
+    cycle = await get_active_cycle()
+    if not cycle:
+        await message.reply_text(_campaign_missing(), parse_mode="HTML")
+        return
+    await message.reply_text(
+        _campaign_home_text(cycle),
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
+
+
+async def _send_xp_status(message: Message, user_id: int) -> None:
+    """Send campaign XP status for a user."""
+    xp, rank, total, cycle = await get_campaign_rank(user_id)
+    if not cycle:
+        await message.reply_text(_campaign_missing(), parse_mode="HTML")
+        return
+
+    rank_text = f"#{rank} of {total}" if rank else "Not ranked yet"
+    await message.reply_text(
+        f"⭐ <b>Your Campaign XP</b>\n\n"
+        f"Cycle: <b>#{cycle.get('cycle_number')}</b>\n"
+        f"XP: <b>{xp:,}</b>\n"
+        f"Rank: <b>{rank_text}</b>",
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
+
+
+async def _send_campaign_leaderboard(message: Message) -> None:
+    """Send the current campaign leaderboard."""
+    top_users = await get_campaign_leaderboard(10)
+    if not top_users:
+        await message.reply_text(
+            "📊 No campaign leaderboard data yet.",
+            reply_markup=campaign_home_keyboard(),
+        )
+        return
+
+    lines = ["🏅 <b>XP Leaderboard — Top 10</b>", "━━━━━━━━━━━━━━━━━━"]
+    medals = ["🥇", "🥈", "🥉"]
+    for index, row in enumerate(top_users, 1):
+        prefix = medals[index - 1] if index <= 3 else f"{index}."
+        lines.append(f"\n{prefix} <b>{_display_user(row)}</b> — {row.get('xp', 0):,} XP")
+    lines.append("\n━━━━━━━━━━━━━━━━━━")
+    lines.append("Ties are ranked by earliest approved XP event.")
+    await message.reply_text(
+        "\n".join(lines),
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
+
+
+def _set_pending(context: ContextTypes.DEFAULT_TYPE, payload: dict) -> None:
+    """Store the next guided campaign action for the user."""
+    context.user_data[PENDING_ACTION_KEY] = payload
+
+
+def _clear_pending(context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Clear the user's pending guided campaign action."""
+    context.user_data.pop(PENDING_ACTION_KEY, None)
+
+
+async def _start_xlink_for_handle(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    username: str,
+) -> bool:
+    """Create an X verification code for a submitted handle."""
+    user_id = await _ensure_user(update)
+    if not user_id or not update.effective_message:
+        return False
+    if not is_x_api_configured():
+        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+        return False
+
+    clean_username = username.lstrip("@").strip()
+    if not clean_username or len(clean_username) > 15:
+        await update.effective_message.reply_text(
+            "❌ Please send a valid X handle, like <code>@hostfi_app</code>.",
+            parse_mode="HTML",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return False
+
+    code = f"HOSTFI-{secrets.token_hex(3).upper()}"
+    record = await create_x_verification(user_id, clean_username, code)
+    if not record:
+        await update.effective_message.reply_text("❌ Could not start X verification. Try again.")
+        return False
+
+    await update.effective_message.reply_text(
+        f"🔗 <b>X Verification Started</b>\n\n"
+        f"Post this code from <b>@{html.escape(clean_username)}</b> on X:\n"
+        f"<code>{code}</code>\n\n"
+        "After posting it, tap <b>I Posted The Code</b>.",
+        parse_mode="HTML",
+        reply_markup=campaign_xverify_keyboard(),
+    )
+    return True
+
+
+async def _verify_x_post_url(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str) -> bool:
+    """Verify a pending X account with a post URL."""
+    user_id = await _ensure_user(update)
+    if not user_id or not update.effective_message:
+        return False
+    if not is_x_api_configured():
+        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+        return False
+
+    account = await get_x_account(user_id)
+    if not account or account.get("status") != "pending":
+        await update.effective_message.reply_text(
+            "⚠️ Start first with <code>/xlink @handle</code> or the Link X button.",
+            parse_mode="HTML",
+        )
+        return False
+
+    parsed = parse_x_post_url(url)
+    if not parsed:
+        await update.effective_message.reply_text(
+            "❌ Send a valid X verification post URL.",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return False
+
+    try:
+        post = await fetch_post(parsed[1], url)
+    except XApiNotConfigured:
+        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+        return False
+    except Exception as exc:
+        logger.error("X verify fetch failed: %s", exc)
+        await update.effective_message.reply_text("❌ Could not verify that X post. Try again later.")
+        return False
+
+    expected_user = str(account.get("username") or "").lower().lstrip("@")
+    expected_code = str(account.get("verification_code") or "")
+    if post.username != expected_user or expected_code not in post.text:
+        await update.effective_message.reply_text(
+            "❌ Verification failed. The post must come from your linked handle and include the code.",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return False
+
+    verified = await verify_x_account(user_id, post.author_id, post.username, post.post_id)
+    if not verified:
+        await update.effective_message.reply_text("❌ Could not save X verification. Try again.")
+        return False
+
+    await update.effective_message.reply_text(
+        f"✅ X account linked: <b>@{html.escape(post.username)}</b>",
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
+    return True
+
+
+async def _submit_raid_proof_url(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    raid_id: int,
+    proof_url: str,
+) -> bool:
+    """Submit a raid proof URL and auto-award XP if strict checks pass."""
+    user_id = await _ensure_user(update)
+    if not user_id or not update.effective_message:
+        return False
+    if not is_x_api_configured():
+        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+        return False
+
+    raid = await get_raid(raid_id)
+    if not raid or raid.get("status") != "active":
+        await update.effective_message.reply_text("❌ Raid not found or no longer active.")
+        return False
+
+    cycle = await get_active_cycle()
+    if not cycle or int(cycle["id"]) != int(raid["cycle_id"]):
+        await update.effective_message.reply_text("❌ This raid belongs to a finished campaign cycle.")
+        return False
+    if await is_disqualified(user_id, int(raid["cycle_id"])):
+        await update.effective_message.reply_text("⛔ You are disqualified from the current campaign cycle.")
+        return False
+
+    deadline = _parse_iso(raid.get("deadline_at"))
+    if deadline and _utc_now() > deadline:
+        await update.effective_message.reply_text("⏰ This raid has expired.")
+        return False
+    if await has_raid_submission(raid_id, user_id):
+        await update.effective_message.reply_text("⚠️ You already submitted proof for this raid.")
+        return False
+
+    account = await get_x_account(user_id)
+    if not account or account.get("status") != "verified":
+        await update.effective_message.reply_text(
+            "⚠️ Link your X account first with the Link X button.",
+            parse_mode="HTML",
+            reply_markup=campaign_home_keyboard(),
+        )
+        return False
+
+    parsed = parse_x_post_url(proof_url)
+    if not parsed:
+        await update.effective_message.reply_text(
+            "❌ Send a valid X proof URL.",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return False
+
+    try:
+        post = await fetch_post(parsed[1], proof_url)
+    except Exception as exc:
+        logger.error("Raid proof fetch failed: %s", exc)
+        await update.effective_message.reply_text("❌ Could not verify that X proof.")
+        return False
+
+    if post.author_id != str(account.get("x_user_id")):
+        await update.effective_message.reply_text("❌ Proof must come from your linked X account.")
+        return False
+    if not is_reply_or_quote_to(post, str(raid["target_post_id"]), str(raid["target_url"])):
+        await update.effective_message.reply_text("❌ Proof must be a reply/quote/engagement on the approved raid post.")
+        return False
+    if not is_meaningful_x_text(post.text):
+        await update.effective_message.reply_text("❌ Low-effort raid text does not qualify for XP.")
+        return False
+
+    submission = await record_raid_submission(
+        raid_id,
+        raid["cycle_id"],
+        user_id,
+        post.post_id,
+        proof_url,
+        "approved",
+        {"text": post.text[:500]},
+    )
+    if not submission:
+        await update.effective_message.reply_text("❌ Could not record your raid proof.")
+        return False
+
+    event = await award_xp(
+        user_id,
+        XP_RAID,
+        "raid",
+        f"Raid #{raid_id}",
+        evidence_url=proof_url,
+        external_id=post.post_id,
+        metadata={"raid_id": raid_id},
+        cycle_id=raid["cycle_id"],
+    )
+    if not event:
+        await update.effective_message.reply_text("❌ Could not award XP. Is the campaign active?")
+        return False
+
+    await update.effective_message.reply_text(
+        f"✅ Raid approved automatically. You earned <b>{XP_RAID} XP</b>!",
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
+    return True
+
+
+async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str) -> bool:
+    """Submit a personal HostFi-related X post for automatic XP."""
+    user_id = await _ensure_user(update)
+    if not user_id or not update.effective_message:
+        return False
+    if not is_x_api_configured():
+        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+        return False
+
+    cycle = await get_active_cycle()
+    if not cycle:
+        await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
+        return False
+    if await is_disqualified(user_id, int(cycle["id"])):
+        await update.effective_message.reply_text("⛔ You are disqualified from the current campaign cycle.")
+        return False
+
+    account = await get_x_account(user_id)
+    if not account or account.get("status") != "verified":
+        await update.effective_message.reply_text(
+            "⚠️ Link your X account first with the Link X button.",
+            parse_mode="HTML",
+            reply_markup=campaign_home_keyboard(),
+        )
+        return False
+
+    parsed = parse_x_post_url(url)
+    if not parsed:
+        await update.effective_message.reply_text(
+            "❌ Send a valid X post URL.",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return False
+
+    day = _utc_now().date().isoformat()
+    if await has_daily_x_post(user_id, cycle["id"], day):
+        await update.effective_message.reply_text("⚠️ You already earned personal X post XP today.")
+        return False
+
+    try:
+        post = await fetch_post(parsed[1], url)
+    except Exception as exc:
+        logger.error("X post fetch failed: %s", exc)
+        await update.effective_message.reply_text("❌ Could not verify that X post.")
+        return False
+
+    if post.author_id != str(account.get("x_user_id")):
+        await update.effective_message.reply_text("❌ Post must come from your linked X account.")
+        return False
+    if not mentions_hostfi(post.text) or not is_meaningful_x_text(post.text):
+        await update.effective_message.reply_text("❌ Post must be meaningful and clearly about HostFi.")
+        return False
+    if post.created_at:
+        cycle_start = _parse_iso(cycle.get("start_at"))
+        if cycle_start and post.created_at < cycle_start:
+            await update.effective_message.reply_text("❌ This post was made before the current campaign cycle.")
+            return False
+
+    submission = await record_x_post_submission(
+        cycle["id"],
+        user_id,
+        post.post_id,
+        url,
+        day,
+        "approved",
+        {"text": post.text[:500]},
+    )
+    if not submission:
+        await update.effective_message.reply_text("❌ Could not record this X post.")
+        return False
+
+    event = await award_xp(
+        user_id,
+        XP_X_POST,
+        "x_post",
+        "Approved personal HostFi X post",
+        evidence_url=url,
+        external_id=post.post_id,
+        metadata={"day": day},
+    )
+    if not event:
+        await update.effective_message.reply_text("❌ Could not award XP.")
+        return False
+
+    await update.effective_message.reply_text(
+        f"✅ HostFi X post approved. You earned <b>{XP_X_POST} XP</b>!",
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
+    return True
+
+
 # ---------------------------------------------------------------------------
 # User commands
 # ---------------------------------------------------------------------------
@@ -128,30 +509,7 @@ async def campaign_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Show current campaign status and earning rules."""
     if not update.effective_message:
         return
-
-    cycle = await get_active_cycle()
-    if not cycle:
-        await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
-        return
-
-    end_at = _parse_iso(cycle.get("end_at"))
-    ends = end_at.strftime("%Y-%m-%d %H:%M UTC") if end_at else "Manual finish"
-    text = (
-        f"🏆 <b>HostFi XP Campaign — Cycle #{cycle.get('cycle_number')}</b>\n"
-        "━━━━━━━━━━━━━━━━━━\n\n"
-        f"Ends: <b>{ends}</b>\n\n"
-        "<b>Earn XP:</b>\n"
-        f"• Raids on X: <b>{XP_RAID} XP</b>\n"
-        f"• Telegram invites after 48h: <b>{XP_INVITE} XP</b>\n"
-        f"• Helpful contributions: <b>{XP_HELPFUL} XP</b>\n"
-        f"• Approved HostFi X posts: <b>{XP_X_POST} XP</b> (1/day)\n\n"
-        "<b>Commands:</b>\n"
-        "/invite — Get your invite link\n"
-        "/xlink @handle — Link your X account\n"
-        "/raids — See active raids\n"
-        "/leaderboard — Current top members"
-    )
-    await update.effective_message.reply_text(text, parse_mode="HTML")
+    await _send_campaign_home(update.effective_message)
 
 
 async def xp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -160,22 +518,7 @@ async def xp_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None
     if not user_id or not update.effective_message:
         return
 
-    xp, rank, total, cycle = await get_campaign_rank(user_id)
-    if not cycle:
-        await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
-        return
-
-    await update.effective_message.reply_text(
-        f"⭐ <b>Your Campaign XP</b>\n\n"
-        f"Cycle: <b>#{cycle.get('cycle_number')}</b>\n"
-        f"XP: <b>{xp:,}</b>\n"
-        f"Rank: <b>#{rank}</b> of {total}" if rank else
-        f"⭐ <b>Your Campaign XP</b>\n\n"
-        f"Cycle: <b>#{cycle.get('cycle_number')}</b>\n"
-        f"XP: <b>{xp:,}</b>\n"
-        "Rank: Not ranked yet",
-        parse_mode="HTML",
-    )
+    await _send_xp_status(update.effective_message, user_id)
 
 
 async def xp_router_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -241,46 +584,19 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 
 async def xlink_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Start X account linking with a verification code."""
-    user_id = await _ensure_user(update)
-    if not user_id or not update.effective_message:
-        return
-    if not is_x_api_configured():
-        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+    if not update.effective_message:
         return
     if not context.args:
         await update.effective_message.reply_text(
             "Usage: <code>/xlink @yourhandle</code>", parse_mode="HTML"
         )
         return
-
-    username = context.args[0].lstrip("@").strip()
-    if not username or len(username) > 15:
-        await update.effective_message.reply_text("❌ Please send a valid X handle.")
-        return
-
-    code = f"HOSTFI-{secrets.token_hex(3).upper()}"
-    record = await create_x_verification(user_id, username, code)
-    if not record:
-        await update.effective_message.reply_text("❌ Could not start X verification. Try again.")
-        return
-
-    await update.effective_message.reply_text(
-        f"🔗 <b>X Verification Started</b>\n\n"
-        f"Post this code from <b>@{html.escape(username)}</b> on X:\n"
-        f"<code>{code}</code>\n\n"
-        "Then run:\n"
-        "<code>/xverify https://x.com/yourhandle/status/...</code>",
-        parse_mode="HTML",
-    )
+    await _start_xlink_for_handle(update, context, context.args[0])
 
 
 async def xverify_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Verify a user's X account by checking a verification post."""
-    user_id = await _ensure_user(update)
-    if not user_id or not update.effective_message:
-        return
-    if not is_x_api_configured():
-        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+    if not update.effective_message:
         return
     if not context.args:
         await update.effective_message.reply_text(
@@ -288,44 +604,7 @@ async def xverify_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             parse_mode="HTML",
         )
         return
-
-    account = await get_x_account(user_id)
-    if not account or account.get("status") != "pending":
-        await update.effective_message.reply_text("⚠️ Start first with <code>/xlink @handle</code>.", parse_mode="HTML")
-        return
-
-    parsed = parse_x_post_url(context.args[0])
-    if not parsed:
-        await update.effective_message.reply_text("❌ Send a valid X post URL.")
-        return
-
-    try:
-        post = await fetch_post(parsed[1], context.args[0])
-    except XApiNotConfigured:
-        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
-        return
-    except Exception as exc:
-        logger.error("X verify fetch failed: %s", exc)
-        await update.effective_message.reply_text("❌ Could not verify that X post. Try again later.")
-        return
-
-    expected_user = str(account.get("username") or "").lower().lstrip("@")
-    expected_code = str(account.get("verification_code") or "")
-    if post.username != expected_user or expected_code not in post.text:
-        await update.effective_message.reply_text(
-            "❌ Verification failed. The post must come from your linked handle and include the code."
-        )
-        return
-
-    verified = await verify_x_account(user_id, post.author_id, post.username, post.post_id)
-    if not verified:
-        await update.effective_message.reply_text("❌ Could not save X verification. Try again.")
-        return
-
-    await update.effective_message.reply_text(
-        f"✅ X account linked: <b>@{html.escape(post.username)}</b>",
-        parse_mode="HTML",
-    )
+    await _verify_x_post_url(update, context, context.args[0])
 
 
 async def raids_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -338,22 +617,22 @@ async def raids_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         await update.effective_message.reply_text("📭 No active raids right now.")
         return
 
-    lines = ["🚀 <b>Active HostFi Raids</b>", "━━━━━━━━━━━━━━━━━━"]
+    await update.effective_message.reply_text("🚀 <b>Active HostFi Raids</b>", parse_mode="HTML")
     for raid in raids:
         deadline = _parse_iso(raid.get("deadline_at"))
         deadline_text = deadline.strftime("%Y-%m-%d %H:%M UTC") if deadline else "No deadline"
-        lines.append(
-            f"\n<b>Raid #{raid['id']}</b> — {XP_RAID} XP\n"
+        text = (
+            f"<b>Raid #{raid['id']}</b> — {XP_RAID} XP\n"
             f"Deadline: {deadline_text}\n"
             f"{html.escape(raid.get('target_url') or '')}\n"
-            f"Submit: <code>/raid submit {raid['id']} YOUR_X_PROOF_URL</code>"
+            "Use the buttons below to open the post or submit proof."
         )
-
-    await update.effective_message.reply_text(
-        "\n".join(lines),
-        parse_mode="HTML",
-        link_preview_options=LinkPreviewOptions(is_disabled=True),
-    )
+        await update.effective_message.reply_text(
+            text,
+            parse_mode="HTML",
+            reply_markup=campaign_raid_keyboard(raid["id"], raid.get("target_url") or ""),
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
 
 
 async def raid_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -423,19 +702,13 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         f"Engage with this approved HostFi post on X:\n{html.escape(context.args[1])}\n\n"
         f"Reward: <b>{XP_RAID} XP</b>\n"
         f"Deadline: <b>{deadline_hours} hours</b>\n\n"
-        f"Submit proof with:\n<code>/raid submit {raid['id']} YOUR_X_PROOF_URL</code>"
-    )
-    keyboard = InlineKeyboardMarkup(
-        [
-            [InlineKeyboardButton("Open X Post", url=context.args[1])],
-            [InlineKeyboardButton("How to Submit", callback_data=f"raid_submit_info_{raid['id']}")],
-        ]
+        "Use the buttons below to participate."
     )
     await _send_to_community_groups(
         context.bot,
         text=text,
         parse_mode="HTML",
-        reply_markup=keyboard,
+        reply_markup=campaign_raid_keyboard(raid["id"], context.args[1]),
         link_preview_options=LinkPreviewOptions(is_disabled=True),
     )
     await update.effective_message.reply_text(f"✅ Raid #{raid['id']} created and posted.")
@@ -448,12 +721,6 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 async def _raid_submit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Submit a raid proof URL and auto-award XP if strict checks pass."""
-    user_id = await _ensure_user(update)
-    if not user_id:
-        return
-    if not is_x_api_configured():
-        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
-        return
     if len(context.args) < 3:
         await update.effective_message.reply_text(
             "Usage: <code>/raid submit RAID_ID YOUR_X_PROOF_URL</code>", parse_mode="HTML"
@@ -465,173 +732,17 @@ async def _raid_submit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     except ValueError:
         await update.effective_message.reply_text("❌ Raid ID must be a number.")
         return
-
-    raid = await get_raid(raid_id)
-    if not raid or raid.get("status") != "active":
-        await update.effective_message.reply_text("❌ Raid not found or no longer active.")
-        return
-
-    cycle = await get_active_cycle()
-    if not cycle or int(cycle["id"]) != int(raid["cycle_id"]):
-        await update.effective_message.reply_text("❌ This raid belongs to a finished campaign cycle.")
-        return
-    if await is_disqualified(user_id, int(raid["cycle_id"])):
-        await update.effective_message.reply_text("⛔ You are disqualified from the current campaign cycle.")
-        return
-
-    deadline = _parse_iso(raid.get("deadline_at"))
-    if deadline and _utc_now() > deadline:
-        await update.effective_message.reply_text("⏰ This raid has expired.")
-        return
-
-    if await has_raid_submission(raid_id, user_id):
-        await update.effective_message.reply_text("⚠️ You already submitted proof for this raid.")
-        return
-
-    account = await get_x_account(user_id)
-    if not account or account.get("status") != "verified":
-        await update.effective_message.reply_text("⚠️ Link your X account first with <code>/xlink @handle</code>.", parse_mode="HTML")
-        return
-
-    parsed = parse_x_post_url(context.args[2])
-    if not parsed:
-        await update.effective_message.reply_text("❌ Send a valid X proof URL.")
-        return
-
-    try:
-        post = await fetch_post(parsed[1], context.args[2])
-    except Exception as exc:
-        logger.error("Raid proof fetch failed: %s", exc)
-        await update.effective_message.reply_text("❌ Could not verify that X proof.")
-        return
-
-    if post.author_id != str(account.get("x_user_id")):
-        await update.effective_message.reply_text("❌ Proof must come from your linked X account.")
-        return
-    if not is_reply_or_quote_to(post, str(raid["target_post_id"]), str(raid["target_url"])):
-        await update.effective_message.reply_text("❌ Proof must be a reply/quote/engagement on the approved raid post.")
-        return
-    if not is_meaningful_x_text(post.text):
-        await update.effective_message.reply_text("❌ Low-effort raid text does not qualify for XP.")
-        return
-
-    submission = await record_raid_submission(
-        raid_id,
-        raid["cycle_id"],
-        user_id,
-        post.post_id,
-        context.args[2],
-        "approved",
-        {"text": post.text[:500]},
-    )
-    if not submission:
-        await update.effective_message.reply_text("❌ Could not record your raid proof.")
-        return
-
-    event = await award_xp(
-        user_id,
-        XP_RAID,
-        "raid",
-        f"Raid #{raid_id}",
-        evidence_url=context.args[2],
-        external_id=post.post_id,
-        metadata={"raid_id": raid_id},
-        cycle_id=raid["cycle_id"],
-    )
-    if not event:
-        await update.effective_message.reply_text("❌ Could not award XP. Is the campaign active?")
-        return
-
-    await update.effective_message.reply_text(
-        f"✅ Raid approved automatically. You earned <b>{XP_RAID} XP</b>!",
-        parse_mode="HTML",
-    )
+    await _submit_raid_proof_url(update, context, raid_id, context.args[2])
 
 
 async def xpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Submit a personal HostFi-related X post for automatic XP."""
-    user_id = await _ensure_user(update)
-    if not user_id or not update.effective_message:
-        return
-    if not is_x_api_configured():
-        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+    if not update.effective_message:
         return
     if not context.args:
         await update.effective_message.reply_text("Usage: <code>/xpost YOUR_X_POST_URL</code>", parse_mode="HTML")
         return
-
-    cycle = await get_active_cycle()
-    if not cycle:
-        await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
-        return
-    if await is_disqualified(user_id, int(cycle["id"])):
-        await update.effective_message.reply_text("⛔ You are disqualified from the current campaign cycle.")
-        return
-
-    account = await get_x_account(user_id)
-    if not account or account.get("status") != "verified":
-        await update.effective_message.reply_text("⚠️ Link your X account first with <code>/xlink @handle</code>.", parse_mode="HTML")
-        return
-
-    parsed = parse_x_post_url(context.args[0])
-    if not parsed:
-        await update.effective_message.reply_text("❌ Send a valid X post URL.")
-        return
-
-    day = _utc_now().date().isoformat()
-    if await has_daily_x_post(user_id, cycle["id"], day):
-        await update.effective_message.reply_text("⚠️ You already earned personal X post XP today.")
-        return
-
-    try:
-        post = await fetch_post(parsed[1], context.args[0])
-    except Exception as exc:
-        logger.error("X post fetch failed: %s", exc)
-        await update.effective_message.reply_text("❌ Could not verify that X post.")
-        return
-
-    if post.author_id != str(account.get("x_user_id")):
-        await update.effective_message.reply_text("❌ Post must come from your linked X account.")
-        return
-    if not mentions_hostfi(post.text) or not is_meaningful_x_text(post.text):
-        await update.effective_message.reply_text("❌ Post must be meaningful and clearly about HostFi.")
-        return
-    if post.created_at:
-        cycle_start = _parse_iso(cycle.get("start_at"))
-        if cycle_start and post.created_at < cycle_start:
-            await update.effective_message.reply_text("❌ This post was made before the current campaign cycle.")
-            return
-
-    submission = await record_x_post_submission(
-        cycle["id"],
-        user_id,
-        post.post_id,
-        context.args[0],
-        day,
-        "approved",
-        {"text": post.text[:500]},
-    )
-    if not submission:
-        await update.effective_message.reply_text("❌ Could not record this X post.")
-        return
-
-    event = await award_xp(
-        user_id,
-        XP_X_POST,
-        "x_post",
-        "Approved personal HostFi X post",
-        evidence_url=context.args[0],
-        external_id=post.post_id,
-        metadata={"day": day},
-    )
-    if not event:
-        await update.effective_message.reply_text("❌ Could not award XP.")
-        return
-
-    await update.effective_message.reply_text(
-        f"✅ HostFi X post approved. You earned <b>{XP_X_POST} XP</b>!",
-        parse_mode="HTML",
-    )
+    await _submit_xpost_url(update, context, context.args[0])
 
 
 # ---------------------------------------------------------------------------
@@ -819,6 +930,92 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 # ---------------------------------------------------------------------------
 
 
+async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle campaign inline button actions."""
+    query = update.callback_query
+    if not query or not query.data or not query.message:
+        return
+
+    await query.answer()
+    data = query.data
+
+    if data == "campaign_cancel":
+        _clear_pending(context)
+        await query.message.reply_text("Cancelled.", reply_markup=campaign_home_keyboard())
+        return
+
+    if data == "campaign_home":
+        await _send_campaign_home(query.message)
+        return
+
+    if data == "campaign_xp":
+        await get_or_create_user(query.from_user.id, query.from_user.username, query.from_user.first_name)
+        await _send_xp_status(query.message, query.from_user.id)
+        return
+
+    if data == "campaign_leaderboard":
+        await _send_campaign_leaderboard(query.message)
+        return
+
+    if data == "campaign_invite":
+        await invite_command(update, context)
+        return
+
+    if data == "campaign_raids":
+        await raids_command(update, context)
+        return
+
+    if data == "campaign_xlink_start":
+        _set_pending(context, {"type": "xlink_handle", "chat_id": query.message.chat_id})
+        await query.message.reply_text(
+            "Send your X handle now, like <code>@yourhandle</code>.",
+            parse_mode="HTML",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return
+
+    if data == "campaign_xverify_start":
+        _set_pending(context, {"type": "xverify", "chat_id": query.message.chat_id})
+        await query.message.reply_text(
+            "Send the X post URL that contains your verification code.",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return
+
+    if data == "campaign_xpost_start":
+        _set_pending(context, {"type": "xpost", "chat_id": query.message.chat_id})
+        await query.message.reply_text(
+            "Send your HostFi-related X post URL.",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return
+
+    if data.startswith("campaign_raid_submit_"):
+        try:
+            raid_id = int(data.rsplit("_", 1)[-1])
+        except ValueError:
+            await query.message.reply_text("❌ Invalid raid button.")
+            return
+        _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.message.chat_id})
+        await query.message.reply_text(
+            f"Send your X proof URL for <b>Raid #{raid_id}</b>.",
+            parse_mode="HTML",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return
+
+    if data.startswith("campaign_raid_help_"):
+        raid_id = html.escape(data.rsplit("_", 1)[-1])
+        await query.message.reply_text(
+            f"To earn raid XP:\n"
+            f"1. Open the approved X post.\n"
+            f"2. Reply or quote it from your linked X account.\n"
+            f"3. Tap <b>Submit Proof</b> and send your proof URL.\n\n"
+            f"Fallback command:\n<code>/raid submit {raid_id} YOUR_X_PROOF_URL</code>",
+            parse_mode="HTML",
+        )
+
+
 async def raid_submit_info_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Show raid submission instructions for inline buttons."""
     query = update.callback_query
@@ -830,6 +1027,43 @@ async def raid_submit_info_callback(update: Update, context: ContextTypes.DEFAUL
         f"Submit proof with:\n<code>/raid submit {html.escape(raid_id)} YOUR_X_PROOF_URL</code>",
         parse_mode="HTML",
     )
+
+
+async def campaign_guided_input_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Consume the next message for a pending campaign button flow."""
+    pending = context.user_data.get(PENDING_ACTION_KEY)
+    if not pending:
+        return
+    if not update.effective_message or not update.effective_message.text:
+        return
+    if pending.get("chat_id") and update.effective_chat and update.effective_chat.id != pending["chat_id"]:
+        return
+
+    text = update.effective_message.text.strip()
+    action_type = pending.get("type")
+    success = False
+
+    if action_type == "xlink_handle":
+        success = await _start_xlink_for_handle(update, context, text)
+    elif action_type == "xverify":
+        success = await _verify_x_post_url(update, context, text)
+    elif action_type == "xpost":
+        success = await _submit_xpost_url(update, context, text)
+    elif action_type == "raid_proof":
+        success = await _submit_raid_proof_url(update, context, int(pending.get("raid_id")), text)
+    else:
+        await update.effective_message.reply_text("❌ Unknown campaign action. Cancelled.")
+        success = True
+
+    if success:
+        _clear_pending(context)
+    else:
+        await update.effective_message.reply_text(
+            "Send another value to retry, or tap Cancel.",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+
+    raise ApplicationHandlerStop
 
 
 async def process_invite_awards(bot) -> int:

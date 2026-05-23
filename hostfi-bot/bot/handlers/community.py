@@ -22,6 +22,7 @@ from bot.utils.formatter import (
     format_welcome,
 )
 from bot.utils.keyboards import (
+    campaign_home_keyboard,
     generate_captcha_options,
     verification_keyboard,
     welcome_keyboard,
@@ -571,10 +572,15 @@ async def help_callback(
         "/rules — Community rules\n"
         "/ask [question] — Ask the AI assistant\n"
         "/support — Open a support ticket\n"
+        "/campaign — Open XP campaign panel\n"
         "/rank — Your XP and rank\n"
         "/leaderboard — Top 10 members\n"
     )
-    await query.message.reply_text(help_text, parse_mode="HTML")
+    await query.message.reply_text(
+        help_text,
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -590,6 +596,7 @@ HELP_TEXT = (
     "/ask [question] — Ask the AI assistant\n"
     "/support — Open a support ticket\n\n"
     "<b>Community:</b>\n"
+    "/campaign — Open XP campaign panel\n"
     "/rank — Your XP and rank\n"
     "/leaderboard — Top 10 members\n"
 )
@@ -601,5 +608,9 @@ async def help_command(
     """Handle /help — display available commands."""
     if not update.effective_message:
         return
-    msg = await update.effective_message.reply_text(HELP_TEXT, parse_mode="HTML")
+    msg = await update.effective_message.reply_text(
+        HELP_TEXT,
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
     await schedule_delete(msg, context, 30)

@@ -284,7 +284,7 @@ def _register_callback_handlers(app: Application) -> None:
     """Register all inline keyboard callback handlers."""
 
     from bot.handlers.broadcast import broadcast_confirm_callback
-    from bot.handlers.campaign import raid_submit_info_callback
+    from bot.handlers.campaign import campaign_callback_handler, raid_submit_info_callback
     from bot.handlers.community import (
         help_callback,
         rules_callback,
@@ -311,6 +311,10 @@ def _register_callback_handlers(app: Application) -> None:
         CallbackQueryHandler(
             broadcast_confirm_callback, pattern=r"^broadcast_(confirm|cancel)_"
         )
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(campaign_callback_handler, pattern=r"^campaign_")
     )
 
     app.add_handler(
@@ -353,6 +357,7 @@ def _register_message_handlers(app: Application) -> None:
         left_member_handler,
         new_member_handler,
     )
+    from bot.handlers.campaign import campaign_guided_input_handler
 
     # New member join events
     app.add_handler(
@@ -368,6 +373,17 @@ def _register_message_handlers(app: Application) -> None:
         )
     )
 
+    # Campaign button flows consume the user's next text message when pending.
+    app.add_handler(
+        MessageHandler(
+            filters.TEXT
+            & ~filters.COMMAND
+            & ~filters.StatusUpdate.ALL,
+            campaign_guided_input_handler,
+        ),
+        group=1,
+    )
+
     # Group message filter (spam, scam, flood, +XP)
     # This must be last — it processes all non-command text messages
     app.add_handler(
@@ -376,7 +392,8 @@ def _register_message_handlers(app: Application) -> None:
             & ~filters.COMMAND
             & ~filters.StatusUpdate.ALL,
             group_message_filter,
-        )
+        ),
+        group=2,
     )
 
     logger.info("Message handlers registered")

@@ -41,8 +41,75 @@ def welcome_keyboard() -> InlineKeyboardMarkup:
                 callback_data="show_help",
             ),
         ],
+        [
+            InlineKeyboardButton(
+                "🏆 XP Campaign",
+                callback_data="campaign_home",
+            ),
+        ],
     ]
     return InlineKeyboardMarkup(buttons)
+
+
+# ---------------------------------------------------------------------------
+# Campaign XP
+# ---------------------------------------------------------------------------
+
+
+def campaign_home_keyboard() -> InlineKeyboardMarkup:
+    """Build the main campaign action keyboard."""
+    return InlineKeyboardMarkup(
+        [
+            [
+                InlineKeyboardButton("⭐ My XP", callback_data="campaign_xp"),
+                InlineKeyboardButton("🏅 Leaderboard", callback_data="campaign_leaderboard"),
+            ],
+            [
+                InlineKeyboardButton("👥 Invite Link", callback_data="campaign_invite"),
+                InlineKeyboardButton("🚀 Active Raids", callback_data="campaign_raids"),
+            ],
+            [
+                InlineKeyboardButton("🔗 Link X", callback_data="campaign_xlink_start"),
+                InlineKeyboardButton("✍️ Submit X Post", callback_data="campaign_xpost_start"),
+            ],
+        ]
+    )
+
+
+def campaign_cancel_keyboard() -> InlineKeyboardMarkup:
+    """Build a cancel button for guided campaign replies."""
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("Cancel", callback_data="campaign_cancel")]]
+    )
+
+
+def campaign_xverify_keyboard() -> InlineKeyboardMarkup:
+    """Build the button shown after an X verification code is generated."""
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("I Posted The Code", callback_data="campaign_xverify_start")],
+            [InlineKeyboardButton("Cancel", callback_data="campaign_cancel")],
+        ]
+    )
+
+
+def campaign_raid_keyboard(raid_id: int, target_url: str) -> InlineKeyboardMarkup:
+    """Build action buttons for one active raid."""
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Open X Post", url=target_url)],
+            [
+                InlineKeyboardButton(
+                    "Submit Proof",
+                    callback_data=f"campaign_raid_submit_{raid_id}",
+                ),
+                InlineKeyboardButton(
+                    "How It Works",
+                    callback_data=f"campaign_raid_help_{raid_id}",
+                ),
+            ],
+        ]
+    )
 
 
 # ---------------------------------------------------------------------------
