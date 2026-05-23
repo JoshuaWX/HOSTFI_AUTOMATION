@@ -13,7 +13,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from telegram import LinkPreviewOptions
 from telegram.ext import Application
 
-from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_ID
+from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -300,14 +300,15 @@ async def weekly_leaderboard_job(application: Application) -> None:
 
         leaderboard_msg = await build_leaderboard_message()
 
-        await application.bot.send_message(
-            chat_id=COMMUNITY_GROUP_ID,
-            text=leaderboard_msg,
-            parse_mode="HTML",
-            link_preview_options=LinkPreviewOptions(is_disabled=True),
-        )
+        for chat_id in COMMUNITY_GROUP_IDS:
+            await application.bot.send_message(
+                chat_id=chat_id,
+                text=leaderboard_msg,
+                parse_mode="HTML",
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
+            )
 
-        logger.info("Weekly leaderboard posted to community group")
+        logger.info("Weekly leaderboard posted to %d community group(s)", len(COMMUNITY_GROUP_IDS))
 
     except Exception as exc:
         logger.error("Failed to post weekly leaderboard: %s", exc)

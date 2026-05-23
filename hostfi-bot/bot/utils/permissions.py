@@ -12,7 +12,7 @@ import logging
 
 from telegram import Bot
 
-from config import ADMIN_CHANNEL_ID, ADMIN_IDS, COMMUNITY_GROUP_ID, SUPERADMIN_ID
+from config import ADMIN_CHANNEL_ID, ADMIN_IDS, COMMUNITY_GROUP_IDS, SUPERADMIN_IDS
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ async def is_admin(user_id: int, bot: Bot | None = None) -> bool:
     Check whether a Telegram user is an admin.
 
     Checks in order:
-    1. Is the user the SUPERADMIN? → True
+    1. Is the user one of the SUPERADMIN_ID entries? → True
     2. Is the user in the ADMIN_IDS override list? → True
     3. Is the user an admin/creator in the community group? → True
        (auto-detected from Telegram, like Rose bot)
@@ -38,7 +38,7 @@ async def is_admin(user_id: int, bot: Bot | None = None) -> bool:
     Returns:
         True if the user is an admin
     """
-    if user_id == SUPERADMIN_ID:
+    if user_id in SUPERADMIN_IDS:
         return True
 
     if user_id in ADMIN_IDS:
@@ -47,21 +47,28 @@ async def is_admin(user_id: int, bot: Bot | None = None) -> bool:
     if user_id in _admin_cache:
         return _admin_cache[user_id]
 
-    if bot and COMMUNITY_GROUP_ID:
-        try:
-            member = await bot.get_chat_member(COMMUNITY_GROUP_ID, user_id)
-            result = member.status in ("administrator", "creator")
-            _admin_cache[user_id] = result
-            return result
-        except Exception as exc:
-            logger.debug("Could not check group admin status for %s: %s", user_id, exc)
+    if bot and COMMUNITY_GROUP_IDS:
+        for chat_id in COMMUNITY_GROUP_IDS:
+            try:
+                member = await bot.get_chat_member(chat_id, user_id)
+                if member.status in ("administrator", "creator"):
+                    _admin_cache[user_id] = True
+                    return True
+            except Exception as exc:
+                logger.debug(
+                    "Could not check group admin status for %s in %s: %s",
+                    user_id,
+                    chat_id,
+                    exc,
+                )
+        _admin_cache[user_id] = False
 
     return False
 
 
 async def is_superadmin(user_id: int) -> bool:
     """
-    Check whether a Telegram user ID is the superadmin (bot owner).
+    Check whether a Telegram user ID is one of the configured superadmins.
 
     The superadmin can do everything admins can, plus:
     - /reindex (rebuild AI knowledge base)
@@ -73,7 +80,7 @@ async def is_superadmin(user_id: int) -> bool:
     Returns:
         True if the user is the superadmin
     """
-    return user_id == SUPERADMIN_ID
+    return user_id in SUPERADMIN_IDS
 
 
 def is_admin_channel_chat(chat_id: int | None) -> bool:
@@ -107,4 +114,4 @@ def get_admin_ids() -> list[int]:
     Returns:
         Copy of the configured admin Telegram user IDs
     """
-    return list(ADMIN_IDS)
+    return list(dict.fromkeys([*SUPERADMIN_IDS, *ADMIN_IDS]))

@@ -176,9 +176,9 @@ WEBHOOK_URL=https://your-railway-domain.up.railway.app
 
 # Admin Config
 ADMIN_IDS=123456789,987654321          # Comma-separated Telegram user IDs
-SUPERADMIN_ID=123456789
+SUPERADMIN_ID=123456789,987654321        # Comma-separated superadmin Telegram user IDs
 ADMIN_CHANNEL_ID=-1001234567890        # Private admin ops channel ID
-COMMUNITY_GROUP_ID=-1009876543210      # Main community group ID
+COMMUNITY_GROUP_ID=-1009876543210,-1001111222233  # Comma-separated community group IDs
 
 # Gemini AI
 GEMINI_API_KEY=your_gemini_api_key

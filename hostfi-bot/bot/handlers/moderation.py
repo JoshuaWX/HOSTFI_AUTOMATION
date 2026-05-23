@@ -26,7 +26,7 @@ from bot.utils.formatter import (
 from bot.utils.auto_delete import schedule_delete
 from bot.utils.permissions import is_admin
 from bot.utils.rate_limiter import check_rate_limit
-from config import COMMUNITY_GROUP_ID
+from config import COMMUNITY_GROUP_IDS
 from database.logs import log_action
 from database.users import (
     ban_user,
@@ -832,11 +832,14 @@ async def announce_command(
     safe_text = html.escape(text)
 
     try:
-        await context.bot.send_message(
-            chat_id=COMMUNITY_GROUP_ID,
-            text=f"📢 <b>Announcement</b>\n\n{safe_text}",
-            parse_mode="HTML",
-        )
+        sent = 0
+        for chat_id in COMMUNITY_GROUP_IDS:
+            await context.bot.send_message(
+                chat_id=chat_id,
+                text=f"📢 <b>Announcement</b>\n\n{safe_text}",
+                parse_mode="HTML",
+            )
+            sent += 1
 
         await log_action(
             action="announce",
@@ -845,7 +848,7 @@ async def announce_command(
             metadata={"text": text[:500]},
         )
 
-        await update.message.reply_text("✅ Announcement sent.")
+        await update.message.reply_text(f"✅ Announcement sent to {sent} community group(s).")
         logger.info(
             "Announcement sent by admin %s", update.effective_user.id
         )

@@ -24,7 +24,7 @@ from bot.utils.x_api import (
     mentions_hostfi,
     parse_x_post_url,
 )
-from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_ID
+from config import COMMUNITY_GROUP_IDS, get_primary_community_group_id
 from database.campaign import (
     XP_HELPFUL,
     XP_INVITE,
@@ -93,6 +93,21 @@ def _x_missing() -> str:
         "⚠️ X API verification is not configured yet.\n\n"
         "Set <code>X_BEARER_TOKEN</code> before using X-based XP commands."
     )
+
+
+def _target_community_group_id(update: Update) -> int:
+    """Return the current configured group, or the primary group for DM/admin flows."""
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    return get_primary_community_group_id(chat_id)
+
+
+async def _send_to_community_groups(bot, **kwargs) -> int:
+    """Send one message to every configured community group."""
+    sent = 0
+    for chat_id in COMMUNITY_GROUP_IDS:
+        await bot.send_message(chat_id=chat_id, **kwargs)
+        sent += 1
+    return sent
 
 
 async def _ensure_user(update: Update) -> int | None:
@@ -186,13 +201,18 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
         await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
         return
 
-    existing = await get_or_create_invite_link_record(cycle["id"], user_id)
+    target_chat_id = _target_community_group_id(update)
+    if not target_chat_id:
+        await update.effective_message.reply_text("❌ No community group is configured.")
+        return
+
+    existing = await get_or_create_invite_link_record(cycle["id"], user_id, chat_id=target_chat_id)
     if existing and existing.get("invite_link"):
         link = existing["invite_link"]
     else:
         try:
             invite = await context.bot.create_chat_invite_link(
-                chat_id=COMMUNITY_GROUP_ID,
+                chat_id=target_chat_id,
                 name=f"xp-{cycle['id']}-{user_id}",
                 creates_join_request=False,
             )
@@ -202,7 +222,12 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
                 "❌ Could not create your invite link. Make sure the bot can invite users."
             )
             return
-        record = await get_or_create_invite_link_record(cycle["id"], user_id, invite.invite_link)
+        record = await get_or_create_invite_link_record(
+            cycle["id"],
+            user_id,
+            invite.invite_link,
+            chat_id=target_chat_id,
+        )
         link = record["invite_link"] if record else invite.invite_link
 
     await update.effective_message.reply_text(
@@ -406,8 +431,8 @@ async def _raid_create(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             [InlineKeyboardButton("How to Submit", callback_data=f"raid_submit_info_{raid['id']}")],
         ]
     )
-    await context.bot.send_message(
-        chat_id=COMMUNITY_GROUP_ID,
+    await _send_to_community_groups(
+        context.bot,
         text=text,
         parse_mode="HTML",
         reply_markup=keyboard,
@@ -665,7 +690,7 @@ async def cycle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         text = "\n".join(lines)
         await update.effective_message.reply_text(text, parse_mode="HTML")
         try:
-            await context.bot.send_message(COMMUNITY_GROUP_ID, text=text, parse_mode="HTML")
+            await _send_to_community_groups(context.bot, text=text, parse_mode="HTML")
         except Exception as exc:
             logger.warning("Could not announce cycle finish to community: %s", exc)
         return
@@ -822,7 +847,7 @@ async def process_invite_awards(bot) -> int:
             await mark_invite_join(join["id"], "ineligible")
             continue
         try:
-            member = await bot.get_chat_member(COMMUNITY_GROUP_ID, invitee)
+            member = await bot.get_chat_member(int(join.get("chat_id") or get_primary_community_group_id()), invitee)
             if member.status in ("left", "kicked"):
                 await mark_invite_join(join["id"], "ineligible")
                 continue

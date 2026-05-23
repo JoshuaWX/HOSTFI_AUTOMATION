@@ -65,6 +65,25 @@ def _parse_int_list(raw: str) -> list[int]:
         sys.exit(1)
 
 
+def _id_variants(chat_id: int) -> set[int]:
+    """Return Telegram chat ID variants for legacy and -100 supergroup forms."""
+    variants = {chat_id}
+    if chat_id == 0:
+        return variants
+
+    abs_str = str(abs(chat_id))
+    if chat_id < 0 and not abs_str.startswith("100"):
+        variants.add(int(f"-100{abs_str}"))
+    if chat_id < 0 and abs_str.startswith("100") and len(abs_str) > 3:
+        variants.add(-int(abs_str[3:]))
+    return variants
+
+
+def _primary_id(values: list[int]) -> int:
+    """Return the first configured ID, or 0 when the list is empty."""
+    return values[0] if values else 0
+
+
 # ---------------------------------------------------------------------------
 # Telegram
 # ---------------------------------------------------------------------------
@@ -77,11 +96,37 @@ WEBHOOK_URL: str = _require_env("WEBHOOK_URL")
 # ---------------------------------------------------------------------------
 _raw_admin_ids = os.getenv("ADMIN_IDS", "")
 ADMIN_IDS: list[int] = _parse_int_list(_raw_admin_ids) if _raw_admin_ids.strip() else []
-SUPERADMIN_ID: int = int(_require_env("SUPERADMIN_ID"))
+SUPERADMIN_IDS: list[int] = _parse_int_list(_require_env("SUPERADMIN_ID"))
+if not SUPERADMIN_IDS:
+    print("FATAL: SUPERADMIN_ID must contain at least one Telegram user ID", file=sys.stderr)
+    sys.exit(1)
+SUPERADMIN_ID: int = _primary_id(SUPERADMIN_IDS)
 _raw_admin_channel = os.getenv("ADMIN_CHANNEL_ID", "")
 ADMIN_CHANNEL_ID: int = int(_raw_admin_channel) if _raw_admin_channel.strip() else 0
 _raw_community_group = os.getenv("COMMUNITY_GROUP_ID", "")
-COMMUNITY_GROUP_ID: int = int(_raw_community_group) if _raw_community_group.strip() else 0
+COMMUNITY_GROUP_IDS: list[int] = (
+    _parse_int_list(_raw_community_group) if _raw_community_group.strip() else []
+)
+COMMUNITY_GROUP_ID: int = _primary_id(COMMUNITY_GROUP_IDS)
+COMMUNITY_GROUP_ID_VARIANTS: set[int] = {
+    variant for chat_id in COMMUNITY_GROUP_IDS for variant in _id_variants(chat_id)
+}
+COMMUNITY_GROUP_ID_VARIANTS.discard(0)
+
+
+def is_community_group_chat(chat_id: int | None) -> bool:
+    """Return True when a chat ID is one of the configured community groups."""
+    return bool(chat_id and chat_id in COMMUNITY_GROUP_ID_VARIANTS)
+
+
+def get_community_group_ids() -> list[int]:
+    """Return configured community group IDs in env order."""
+    return list(COMMUNITY_GROUP_IDS)
+
+
+def get_primary_community_group_id(chat_id: int | None = None) -> int:
+    """Use the current group when configured; otherwise fall back to the first group."""
+    return chat_id if is_community_group_chat(chat_id) else COMMUNITY_GROUP_ID
 
 # ---------------------------------------------------------------------------
 # Gemini AI

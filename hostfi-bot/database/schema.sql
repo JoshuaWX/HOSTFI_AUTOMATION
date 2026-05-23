@@ -134,14 +134,22 @@ CREATE TABLE IF NOT EXISTS campaign_invite_links (
     id                      BIGSERIAL PRIMARY KEY,
     cycle_id                 BIGINT NOT NULL REFERENCES campaign_cycles(id),
     inviter_telegram_id      BIGINT NOT NULL,
+    chat_id                  BIGINT,
     invite_link              TEXT UNIQUE NOT NULL,
     is_active                BOOLEAN DEFAULT TRUE,
     created_at               TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE (cycle_id, inviter_telegram_id)
+    UNIQUE (cycle_id, inviter_telegram_id, chat_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaign_invite_links_inviter
     ON campaign_invite_links (inviter_telegram_id);
+
+ALTER TABLE campaign_invite_links
+    ADD COLUMN IF NOT EXISTS chat_id BIGINT;
+ALTER TABLE campaign_invite_links
+    DROP CONSTRAINT IF EXISTS campaign_invite_links_cycle_id_inviter_telegram_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_invite_links_cycle_inviter_chat
+    ON campaign_invite_links (cycle_id, inviter_telegram_id, chat_id);
 
 -- Telegram campaign invite joins
 CREATE TABLE IF NOT EXISTS campaign_invite_joins (
@@ -149,6 +157,7 @@ CREATE TABLE IF NOT EXISTS campaign_invite_joins (
     cycle_id                 BIGINT NOT NULL REFERENCES campaign_cycles(id),
     inviter_telegram_id      BIGINT NOT NULL,
     invitee_telegram_id      BIGINT NOT NULL,
+    chat_id                  BIGINT,
     invite_link              TEXT NOT NULL,
     joined_at                TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     eligible_at              TIMESTAMPTZ NOT NULL,
@@ -156,11 +165,18 @@ CREATE TABLE IF NOT EXISTS campaign_invite_joins (
     status                   TEXT DEFAULT 'pending'
                                 CHECK (status IN ('pending', 'awarded', 'ineligible')),
     metadata                 JSONB DEFAULT '{}'::jsonb,
-    UNIQUE (cycle_id, invitee_telegram_id)
+    UNIQUE (cycle_id, invitee_telegram_id, chat_id)
 );
 
 CREATE INDEX IF NOT EXISTS idx_campaign_invite_joins_pending
     ON campaign_invite_joins (status, eligible_at);
+
+ALTER TABLE campaign_invite_joins
+    ADD COLUMN IF NOT EXISTS chat_id BIGINT;
+ALTER TABLE campaign_invite_joins
+    DROP CONSTRAINT IF EXISTS campaign_invite_joins_cycle_id_invitee_telegram_id_key;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_campaign_invite_joins_cycle_invitee_chat
+    ON campaign_invite_joins (cycle_id, invitee_telegram_id, chat_id);
 
 -- Linked X accounts
 CREATE TABLE IF NOT EXISTS x_accounts (

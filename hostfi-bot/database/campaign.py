@@ -404,6 +404,7 @@ async def get_or_create_invite_link_record(
     cycle_id: int,
     inviter_telegram_id: int,
     invite_link: str | None = None,
+    chat_id: int | None = None,
 ) -> dict | None:
     """Fetch or create/update a campaign invite link record."""
 
@@ -414,6 +415,7 @@ async def get_or_create_invite_link_record(
             .select("*")
             .eq("cycle_id", cycle_id)
             .eq("inviter_telegram_id", inviter_telegram_id)
+            .eq("chat_id", chat_id)
             .limit(1)
             .execute()
         )
@@ -436,6 +438,7 @@ async def get_or_create_invite_link_record(
                 {
                     "cycle_id": cycle_id,
                     "inviter_telegram_id": inviter_telegram_id,
+                    "chat_id": chat_id,
                     "invite_link": invite_link,
                 }
             )
@@ -487,6 +490,7 @@ async def record_invite_join(invite_link: str, invitee_telegram_id: int) -> dict
                     "cycle_id": link_row["cycle_id"],
                     "inviter_telegram_id": link_row["inviter_telegram_id"],
                     "invitee_telegram_id": invitee_telegram_id,
+                    "chat_id": link_row.get("chat_id"),
                     "invite_link": invite_link,
                     "joined_at": _iso(joined_at),
                     "eligible_at": _iso(joined_at + timedelta(hours=48)),

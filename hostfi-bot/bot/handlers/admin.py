@@ -15,7 +15,7 @@ from telegram.ext import ContextTypes
 from bot.utils.auto_delete import schedule_error_delete
 from bot.utils.permissions import is_admin, is_superadmin
 from bot.utils.permissions import is_admin_channel_chat
-from config import COMMUNITY_GROUP_ID
+from config import COMMUNITY_GROUP_IDS
 from database.client import get_supabase_client
 from database.logs import log_action
 
@@ -24,14 +24,21 @@ logger = logging.getLogger(__name__)
 
 async def _get_live_community_member_count(bot: Bot | None) -> int | None:
     """Return live member count from Telegram group, or None if unavailable."""
-    if not bot or not COMMUNITY_GROUP_ID:
+    if not bot or not COMMUNITY_GROUP_IDS:
         return None
 
-    try:
-        return await bot.get_chat_member_count(COMMUNITY_GROUP_ID)
-    except Exception as exc:
-        logger.warning("Could not fetch live community member count: %s", exc)
-        return None
+    total = 0
+    found_any = False
+    for chat_id in COMMUNITY_GROUP_IDS:
+        try:
+            total += await bot.get_chat_member_count(chat_id)
+            found_any = True
+        except Exception as exc:
+            logger.warning("Could not fetch live community member count for %s: %s", chat_id, exc)
+    if found_any:
+        return total
+
+    return None
 
 
 async def _reply_error(

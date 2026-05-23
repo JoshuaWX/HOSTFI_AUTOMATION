@@ -69,8 +69,8 @@ Edit `.env` with your actual credentials. **Detailed instructions for each varia
 | `TELEGRAM_BOT_TOKEN` | **Yes** | Bot token from BotFather | See **Bot Token Setup** |
 | `TELEGRAM_WEBHOOK_SECRET` | **Yes** | Random secret for webhook security | See **Webhook Secret** |
 | `WEBHOOK_URL` | **Yes** | Your public URL | See **Run Locally** or **Railway Deployment** |
-| `SUPERADMIN_ID` | **Yes** | Your Telegram user ID (bot owner) | See **Getting Telegram IDs** |
-| `COMMUNITY_GROUP_ID` | **Yes** | Community group ID (starts with `-100`) | See **Getting Telegram IDs** |
+| `SUPERADMIN_ID` | **Yes** | One or more superadmin Telegram user IDs, comma-separated | See **Getting Telegram IDs** |
+| `COMMUNITY_GROUP_ID` | **Yes** | One or more community group IDs, comma-separated | See **Getting Telegram IDs** |
 | `GEMINI_API_KEY` | **Yes** | Gemini API key | See **Gemini Setup** |
 | `GEMINI_MODEL` | No | Gemini model, defaults to `gemini-2.5-flash` | `.env.example` |
 | `X_BEARER_TOKEN` | For XP campaign X features | Official X API bearer token | X Developer Portal |
@@ -149,9 +149,9 @@ The bot works **exactly like Rose** — you do NOT need to manually list admin I
 
 **Anyone you promote to admin in your Telegram group automatically has admin access to the bot.** The bot checks Telegram's group admin list in real-time. If you promote someone to admin in the group, they can immediately use `/warn`, `/ban`, `/broadcast`, etc. If you demote them, they lose access.
 
-**SUPERADMIN_ID** is the bot owner (you). It gives you one extra power that regular admins don't have:
+**SUPERADMIN_ID** can contain one bot owner ID or a comma-separated list of superadmin IDs. Superadmins get extra powers that regular admins don't have:
 - `/reindex` — rebuild the AI knowledge base (this touches the bot's core data, so only the owner should do it)
-- The superadmin can never be warned/muted/banned by other admins
+- Superadmins can never be warned/muted/banned by other admins
 
 **ADMIN_IDS** (optional) is for adding extra people who should be admins *even if they're not group admins* — for example, a developer or support person who doesn't need to be in the group. Leave it empty if you don't need this.
 
@@ -160,13 +160,13 @@ The bot works **exactly like Rose** — you do NOT need to manually list admin I
 **Your User ID (for SUPERADMIN_ID):**
 1. Message [@userinfobot](https://t.me/userinfobot) on Telegram
 2. It will reply with your user ID (a number like `6129358034`)
-3. Set `SUPERADMIN_ID` to this number
+3. Set `SUPERADMIN_ID` to this number, or multiple IDs separated by commas, e.g. `6129358034,7123456789`
 
 **Community Group ID (for COMMUNITY_GROUP_ID):**
 1. Add [@RawDataBot](https://t.me/RawDataBot) to your community group temporarily
 2. Send any message in the group — RawDataBot will reply with JSON data
 3. Look for `"chat": {"id": -100xxxxxxxxxx}` — that negative number is your group ID
-4. Set `COMMUNITY_GROUP_ID` to that number (e.g. `-1001234567890`)
+4. Set `COMMUNITY_GROUP_ID` to that number, or multiple group IDs separated by commas, e.g. `-1001234567890,-1009876543210`
 5. Remove @RawDataBot from the group — you only need it once
 
 **Admin Channel ID (for ADMIN_CHANNEL_ID — optional):**
@@ -242,7 +242,7 @@ You don't need everything set up to start testing. Here's the recommended order:
 5. **Generate webhook secret** and set `TELEGRAM_WEBHOOK_SECRET`
 6. **Set up ngrok** → set `WEBHOOK_URL` to the ngrok URL
 7. **Run `python main.py`** — the bot will start! You can test `/start`, `/help`, `/price btc`, `/ask` in DM
-8. **Create your community group** → add bot → get group ID with @RawDataBot → set `COMMUNITY_GROUP_ID`
+8. **Create your community group(s)** → add bot → get group IDs with @RawDataBot → set `COMMUNITY_GROUP_ID`
 9. **Optionally** create admin channel, set up Redis, etc.
 
 > You can test most bot features (prices, AI, commands) without COMMUNITY_GROUP_ID or ADMIN_CHANNEL_ID. Those are only needed for group-specific features like welcome CAPTCHA and admin alerts. Set `COMMUNITY_GROUP_ID=0` and `ADMIN_CHANNEL_ID=0` temporarily.
@@ -317,8 +317,8 @@ git push -u origin main
    TELEGRAM_BOT_TOKEN=your_token
    TELEGRAM_WEBHOOK_SECRET=your_secret
    WEBHOOK_URL=https://your-domain.up.railway.app    (set after step 5)
-   SUPERADMIN_ID=your_user_id
-   COMMUNITY_GROUP_ID=your_group_id                  (use 0 temporarily if you don't have it yet)
+   SUPERADMIN_ID=your_user_id,your_second_superadmin_id
+   COMMUNITY_GROUP_ID=your_group_id,your_second_group_id
    ADMIN_CHANNEL_ID=0                                (set later when you create the admin channel)
    GEMINI_API_KEY=your_gemini_key
    GEMINI_MODEL=gemini-2.5-flash

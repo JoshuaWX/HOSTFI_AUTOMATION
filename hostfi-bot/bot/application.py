@@ -18,7 +18,12 @@ from telegram.ext import (
     filters,
 )
 
-from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_ID, TELEGRAM_BOT_TOKEN, TELEGRAM_WEBHOOK_SECRET
+from config import (
+    ADMIN_CHANNEL_ID,
+    COMMUNITY_GROUP_ID_VARIANTS,
+    TELEGRAM_BOT_TOKEN,
+    TELEGRAM_WEBHOOK_SECRET,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,9 +87,8 @@ def _register_group_guard(app: Application) -> None:
         if chat is None:
             return
         if chat.type in ("group", "supergroup"):
-            allowed: set[int] = set()
-            for cid in (COMMUNITY_GROUP_ID, ADMIN_CHANNEL_ID):
-                allowed.update(_id_variants(cid))
+            allowed: set[int] = set(COMMUNITY_GROUP_ID_VARIANTS)
+            allowed.update(_id_variants(ADMIN_CHANNEL_ID))
             allowed.discard(0)
             if chat.id not in allowed:
                 logger.warning(

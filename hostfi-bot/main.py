@@ -16,7 +16,7 @@ from telegram import BotCommand, BotCommandScopeAllGroupChats, BotCommandScopeAl
 from bot.application import build_application
 from config import (
     ADMIN_CHANNEL_ID,
-    COMMUNITY_GROUP_ID,
+    COMMUNITY_GROUP_IDS,
     PORT,
     TELEGRAM_BOT_TOKEN,
     TELEGRAM_WEBHOOK_SECRET,
@@ -130,7 +130,7 @@ async def lifespan(app: FastAPI):
             logger.warning("Could not set admin channel commands: %s", exc)
 
     # Admin commands in the community group (visible only to admins)
-    if COMMUNITY_GROUP_ID:
+    if COMMUNITY_GROUP_IDS:
         group_admin_commands = group_commands + [
             BotCommand("warn", "Warn a user"),
             BotCommand("mute", "Mute a user"),
@@ -140,19 +140,20 @@ async def lifespan(app: FastAPI):
             BotCommand("kick", "Kick a user"),
             BotCommand("pin", "Pin a message"),
         ]
-        try:
-            logger.info(
-                "Registering admin commands for group %s with %d commands",
-                COMMUNITY_GROUP_ID,
-                len(group_admin_commands),
-            )
-            await _bot_app.bot.set_my_commands(
-                group_admin_commands,
-                scope=BotCommandScopeChatAdministrators(chat_id=COMMUNITY_GROUP_ID),
-            )
-            logger.info("Group admin commands registered successfully")
-        except Exception as exc:
-            logger.error("Could not set group admin commands for chat %s: %s", COMMUNITY_GROUP_ID, exc)
+        for chat_id in COMMUNITY_GROUP_IDS:
+            try:
+                logger.info(
+                    "Registering admin commands for group %s with %d commands",
+                    chat_id,
+                    len(group_admin_commands),
+                )
+                await _bot_app.bot.set_my_commands(
+                    group_admin_commands,
+                    scope=BotCommandScopeChatAdministrators(chat_id=chat_id),
+                )
+                logger.info("Group admin commands registered for %s", chat_id)
+            except Exception as exc:
+                logger.error("Could not set group admin commands for chat %s: %s", chat_id, exc)
 
     logger.info("Scoped command menus registered")
 

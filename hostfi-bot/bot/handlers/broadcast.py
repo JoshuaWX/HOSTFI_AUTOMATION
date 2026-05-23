@@ -16,7 +16,7 @@ from telegram.ext import ContextTypes, ConversationHandler, filters
 from bot.utils.keyboards import confirm_broadcast_keyboard
 from bot.utils.permissions import is_admin
 from bot.utils.rate_limiter import check_rate_limit, get_redis
-from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_ID, TELEGRAM_BOT_TOKEN
+from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_IDS, TELEGRAM_BOT_TOKEN
 from database.logs import log_action
 from database.campaign import get_campaign_leaderboard, get_campaign_rank
 from database.users import (
@@ -24,6 +24,16 @@ from database.users import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+async def _send_to_community_groups(bot, method: str, **kwargs) -> int:
+    """Send content to every configured community group."""
+    sent = 0
+    for chat_id in COMMUNITY_GROUP_IDS:
+        send = getattr(bot, method)
+        await send(chat_id=chat_id, **kwargs)
+        sent += 1
+    return sent
 
 
 # ---------------------------------------------------------------------------
@@ -427,29 +437,34 @@ async def broadcast_confirm_callback(
         btype = broadcast_data["type"]
 
         if btype == "text":
-            await context.bot.send_message(
-                chat_id=COMMUNITY_GROUP_ID,
+            sent = await _send_to_community_groups(
+                context.bot,
+                "send_message",
                 text=broadcast_data["text"],
                 parse_mode="HTML",
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
         elif btype == "photo":
-            await context.bot.send_photo(
-                chat_id=COMMUNITY_GROUP_ID,
+            sent = await _send_to_community_groups(
+                context.bot,
+                "send_photo",
                 photo=broadcast_data["photo_id"],
                 caption=broadcast_data["caption"],
                 parse_mode="HTML",
             )
         elif btype == "video":
-            await context.bot.send_video(
-                chat_id=COMMUNITY_GROUP_ID,
+            sent = await _send_to_community_groups(
+                context.bot,
+                "send_video",
                 video=broadcast_data["video_id"],
                 caption=broadcast_data["caption"],
                 parse_mode="HTML",
             )
+        else:
+            sent = 0
 
         await query.edit_message_text(
-            f"✅ Broadcast sent to the community group!"
+            f"✅ Broadcast sent to {sent} community group(s)!"
         )
 
         # Log the broadcast
@@ -563,15 +578,18 @@ async def poll_command(
         options = parts[1:]
 
         # Send poll to community group
-        poll_msg = await context.bot.send_poll(
-            chat_id=COMMUNITY_GROUP_ID,
-            question=question,
-            options=options,
-            is_anonymous=False,
-        )
+        poll_message_ids = []
+        for chat_id in COMMUNITY_GROUP_IDS:
+            poll_msg = await context.bot.send_poll(
+                chat_id=chat_id,
+                question=question,
+                options=options,
+                is_anonymous=False,
+            )
+            poll_message_ids.append({"chat_id": chat_id, "message_id": poll_msg.message_id})
 
         await update.effective_message.reply_text(
-            f"✅ Poll created in the community group!\n\n"
+            f"✅ Poll created in {len(poll_message_ids)} community group(s)!\n\n"
             f"📊 <b>{html.escape(question)}</b>\n"
             f"Options: {len(options)}",
             parse_mode="HTML",
@@ -584,7 +602,7 @@ async def poll_command(
             metadata={
                 "question": question,
                 "options": options,
-                "message_id": poll_msg.message_id,
+                "messages": poll_message_ids,
             },
         )
 

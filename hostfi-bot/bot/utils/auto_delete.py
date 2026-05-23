@@ -10,7 +10,7 @@ import logging
 from telegram import Message
 from telegram.ext import ContextTypes
 
-from config import COMMUNITY_GROUP_ID
+from config import is_community_group_chat
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ async def schedule_delete(
         context: Bot context (must have job_queue)
         delay: Seconds before deletion
     """
-    if not COMMUNITY_GROUP_ID or message.chat_id != COMMUNITY_GROUP_ID:
+    if not is_community_group_chat(message.chat_id):
         return
 
     context.job_queue.run_once(
