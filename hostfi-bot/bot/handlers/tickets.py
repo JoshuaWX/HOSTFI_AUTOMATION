@@ -45,6 +45,72 @@ async def _reply_error(
     await schedule_error_delete(msg, context, 5)
 
 
+def _profile_link(
+    telegram_id: int | str,
+    *,
+    username: str | None = None,
+    first_name: str | None = None,
+) -> str:
+    """Return a clickable Telegram profile link with the best available label."""
+    safe_id = int(telegram_id)
+    clean_username = html.unescape(str(username or "")).lstrip("@").strip()
+    clean_name = html.unescape(str(first_name or "")).strip()
+    label = f"@{clean_username}" if clean_username else clean_name or str(safe_id)
+    return f"<a href='tg://user?id={safe_id}'>{html.escape(label)}</a>"
+
+
+def _ticket_user_link(ticket: dict) -> str:
+    """Return the ticket owner's clickable display link."""
+    profile = ticket.get("user_profile") or {}
+    return _profile_link(
+        ticket.get("user_telegram_id"),
+        username=profile.get("username"),
+        first_name=profile.get("first_name"),
+    )
+
+
+def _ticket_admin_link(ticket: dict) -> str | None:
+    """Return the assigned admin clickable display link, if present."""
+    admin_id = ticket.get("assigned_admin_id")
+    if not admin_id:
+        return None
+    profile = ticket.get("admin_profile") or {}
+    return _profile_link(
+        admin_id,
+        username=profile.get("username"),
+        first_name=profile.get("first_name"),
+    )
+
+
+def _format_ticket_card(ticket: dict) -> str:
+    """Build a compact admin-facing support ticket card."""
+    ticket_id = html.escape(str(ticket.get("ticket_id") or "Unknown"))
+    status = html.escape(str(ticket.get("status") or "open").capitalize())
+    issue = html.escape(str(ticket.get("issue_description") or "")[:500])
+    created = html.escape(str(ticket.get("created_at") or "Unknown"))
+    lines = [
+        title("Support Ticket", "🎫"),
+        "",
+        field("Ticket", ticket_id),
+        field("From", _ticket_user_link(ticket)),
+        field("Status", status),
+        field("Created", created),
+        field("Issue", issue),
+    ]
+    admin_link = _ticket_admin_link(ticket)
+    if admin_link:
+        lines.append(field("Claimed by", admin_link))
+    return "\n".join(lines)
+
+
+def _replace_claim_status(text: str, admin_link: str) -> str:
+    """Update an existing open-ticket card after it is claimed."""
+    updated = text.replace("<b>Status</b>: Open", "<b>Status</b>: Claimed")
+    if "<b>Claimed by</b>:" not in updated:
+        updated += f"\n{field('Claimed by', admin_link)}"
+    return updated
+
+
 # ---------------------------------------------------------------------------
 # ConversationHandler state for ticket creation
 # ---------------------------------------------------------------------------
@@ -178,7 +244,6 @@ async def ticket_receive_description(
             return ConversationHandler.END
 
         ticket_id = ticket["ticket_id"]
-        safe_name = html.escape(user.first_name or str(user.id))
         safe_desc = html.escape(description[:500])
 
         # Confirm to user
@@ -199,15 +264,19 @@ async def ticket_receive_description(
         )
 
         # Post to admin channel with claim button
-        admin_alert = "\n".join(
-            [
-                title("New Support Ticket", "🎫"),
-                "",
-                field("Ticket", ticket_id),
-                field("User", f"<a href='tg://user?id={user.id}'>{safe_name}</a> (<code>{user.id}</code>)"),
-                field("Issue", safe_desc),
-                field("Created", datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")),
-            ]
+        ticket_alert = {
+            **ticket,
+            "status": "open",
+            "issue_description": description,
+            "created_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC"),
+            "user_profile": {
+                "telegram_id": user.id,
+                "username": user.username,
+                "first_name": user.first_name,
+            },
+        }
+        admin_alert = title("New Support Ticket", "🎫") + "\n\n" + "\n".join(
+            _format_ticket_card(ticket_alert).splitlines()[2:]
         )
 
         await context.bot.send_message(
@@ -354,8 +423,11 @@ async def ticket_claim_callback(
 
     ticket_id = parts[2]
     admin_id = query.from_user.id
-    admin_name = html.escape(query.from_user.first_name or str(admin_id))
-    admin_link = f"<a href='tg://user?id={admin_id}'>{admin_name}</a>"
+    admin_link = _profile_link(
+        admin_id,
+        username=query.from_user.username,
+        first_name=query.from_user.first_name,
+    )
 
     ticket = await claim_ticket(ticket_id, admin_id)
 
@@ -370,8 +442,7 @@ async def ticket_claim_callback(
 
     # Update the admin channel message with claimed status and remove claim button
     await query.edit_message_text(
-        query.message.text_html
-        + f"\n\n{field('Claimed by', admin_link)}",
+        _replace_claim_status(query.message.text_html or "", admin_link),
         parse_mode="HTML",
         reply_markup=None,
     )
@@ -753,33 +824,28 @@ async def tickets_command(
             await _reply_error(update, context, status_text("info", "No active tickets at the moment."))
             return
 
-        status_label = {"open": "Open", "claimed": "Claimed"}
-        lines: list[str] = [
-            title("Active Support Tickets", "🎫"),
-            "",
-        ]
-
-        for t in tickets:
-            tid = t["ticket_id"]
-            status = t.get("status", "open")
-            label = status_label.get(status, status.capitalize())
-            user_id = t.get("user_telegram_id", "?")
-            desc = html.escape((t.get("issue_description") or "")[:80])
-            admin_id = t.get("assigned_admin_id")
-            admin_info = f" → Admin <code>{admin_id}</code>" if admin_id else ""
-
-            lines.append(
-                f"<b>{tid}</b> [{label}]{admin_info}\n"
-                f"{field('User', f'<code>{user_id}</code>')}\n"
-                f"{field('Issue', desc)}"
-            )
-
-        lines.append("")
-        lines.append(field("Total", f"<b>{len(tickets)}</b> active ticket(s)"))
-
+        open_count = sum(1 for ticket in tickets if ticket.get("status") == "open")
+        claimed_count = sum(1 for ticket in tickets if ticket.get("status") == "claimed")
         await update.effective_message.reply_text(
-            "\n".join(lines), parse_mode="HTML"
+            "\n".join(
+                [
+                    title("Active Support Tickets", "🎫"),
+                    "",
+                    field("Total", f"<b>{len(tickets)}</b>"),
+                    field("Open", open_count),
+                    field("Claimed", claimed_count),
+                ]
+            ),
+            parse_mode="HTML",
         )
+        for ticket in tickets:
+            ticket_id = ticket["ticket_id"]
+            reply_markup = ticket_keyboard(ticket_id) if ticket.get("status") == "open" else None
+            await update.effective_message.reply_text(
+                _format_ticket_card(ticket),
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
 
     except Exception as exc:
         logger.error("Error in tickets_command: %s", exc)
@@ -813,9 +879,9 @@ async def build_escalation_alerts(bot) -> int:
     count = 0
     for t in stale_tickets:
         ticket_id = t["ticket_id"]
-        user_id = t.get("user_telegram_id", "?")
         desc = html.escape((t.get("issue_description") or "")[:200])
         created = t.get("created_at", "Unknown")
+        user_link = _ticket_user_link(t)
 
         try:
             await bot.send_message(
@@ -823,7 +889,7 @@ async def build_escalation_alerts(bot) -> int:
                 text=(
                     f"{title('Unclaimed Ticket', '🚨')}\n\n"
                     f"{field('Ticket', ticket_id)}\n"
-                    f"{field('User', f'<code>{user_id}</code>')}\n"
+                    f"{field('From', user_link)}\n"
                     f"{field('Issue', desc)}\n"
                     f"{field('Created', created)}\n\n"
                     "This ticket has been waiting <b>2+ hours</b> without being claimed."

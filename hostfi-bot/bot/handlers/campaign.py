@@ -59,7 +59,7 @@ from database.campaign import (
     verify_x_account,
 )
 from database.logs import log_action
-from database.users import get_or_create_user
+from database.users import get_or_create_user, get_user_by_username
 
 logger = logging.getLogger(__name__)
 
@@ -586,7 +586,16 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             invite.invite_link,
             chat_id=target_chat_id,
         )
-        link = record["invite_link"] if record else invite.invite_link
+        if not record:
+            try:
+                await context.bot.revoke_chat_invite_link(target_chat_id, invite.invite_link)
+            except Exception as exc:
+                logger.warning("Failed to revoke unsaved campaign invite link: %s", exc)
+            await update.effective_message.reply_text(
+                status_text("error", "Could not save your invite link. Please try again.")
+            )
+            return
+        link = record["invite_link"]
 
     await update.effective_message.reply_text(
         f"{title('Campaign Invite Link', '👥')}\n\n"
@@ -885,22 +894,36 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     if len(context.args) < 3:
         await update.effective_message.reply_text(
             "Usage:\n"
-            "<code>/xp add USER_ID AMOUNT reason</code>\n"
-            "<code>/xp deduct USER_ID AMOUNT reason</code>\n"
+            "<code>/xp add @username AMOUNT</code>\n"
+            "<code>/xp deduct @username AMOUNT</code>\n"
             "<code>/xp disqualify USER_ID reason</code>",
             parse_mode="HTML",
         )
         return
 
     action = context.args[0].lower()
-    try:
-        target_id = int(context.args[1])
-    except ValueError:
-        await update.effective_message.reply_text(status_text("error", "USER_ID must be a number."))
-        return
-    await get_or_create_user(target_id)
-
     if action in ("add", "deduct"):
+        if len(context.args) != 3:
+            await update.effective_message.reply_text(
+                "Usage: <code>/xp add @username AMOUNT</code> or "
+                "<code>/xp deduct @username AMOUNT</code>",
+                parse_mode="HTML",
+            )
+            return
+        username = context.args[1]
+        if not username.startswith("@"):
+            await update.effective_message.reply_text(
+                status_text("error", "Use a Telegram username, like @username.")
+            )
+            return
+        user_row = await get_user_by_username(username)
+        if not user_row:
+            await update.effective_message.reply_text(
+                status_text("error", f"{username} is not known to the bot yet. The user must join or message the bot first.")
+            )
+            return
+        target_id = int(user_row["telegram_id"])
+        target_display = f"<b>@{html.escape(str(user_row.get('username') or username).lstrip('@'))}</b>"
         try:
             amount = int(context.args[2])
         except ValueError:
@@ -910,9 +933,16 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
             await update.effective_message.reply_text(status_text("error", "AMOUNT must be positive."))
             return
         signed_amount = amount if action == "add" else -amount
-        reason = " ".join(context.args[3:]) or f"Manual XP {action}"
+        reason = f"Manual XP {action} by superadmin"
         event_type = "manual_add" if action == "add" else "manual_deduct"
     elif action == "disqualify":
+        try:
+            target_id = int(context.args[1])
+        except ValueError:
+            await update.effective_message.reply_text(status_text("error", "USER_ID must be a number."))
+            return
+        await get_or_create_user(target_id)
+        target_display = f"<code>{target_id}</code>"
         rank_xp, _, _, _ = await get_campaign_rank(target_id)
         signed_amount = -rank_xp
         reason = " ".join(context.args[2:]) or "Disqualified by superadmin"
@@ -935,7 +965,7 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     visible_xp = event.get("new_total", 0)
     await update.effective_message.reply_text(
         title("XP Updated", "✅")
-        + f"\n\n{field('User', f'<code>{target_id}</code>')}"
+        + f"\n\n{field('User', target_display)}"
         + f"\n{field('Change', f'<b>{signed_amount:+,}</b>')}"
         + f"\n{field('Visible XP', f'<b>{visible_xp:,}</b>')}",
         parse_mode="HTML",

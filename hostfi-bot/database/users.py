@@ -50,6 +50,38 @@ async def get_user(telegram_id: int) -> dict | None:
         raise
 
 
+async def get_user_by_username(username: str) -> dict | None:
+    """
+    Retrieve a user record by Telegram username.
+
+    Args:
+        username: Telegram username with or without leading @
+
+    Returns:
+        User dict or None if not found
+    """
+    clean = username.strip().lstrip("@").lower()
+    if not clean:
+        return None
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        resp = (
+            client.table("users")
+            .select("*")
+            .ilike("username", clean)
+            .limit(1)
+            .execute()
+        )
+        return resp.data[0] if resp.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("get_user_by_username failed for %s: %s", username, exc)
+        return None
+
+
 async def get_or_create_user(
     telegram_id: int,
     username: str | None = None,

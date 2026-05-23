@@ -410,28 +410,46 @@ async def get_or_create_invite_link_record(
 
     def _op() -> dict | None:
         client = get_supabase_client()
-        existing = (
+
+        query = (
             client.table("campaign_invite_links")
             .select("*")
             .eq("cycle_id", cycle_id)
             .eq("inviter_telegram_id", inviter_telegram_id)
-            .eq("chat_id", chat_id)
-            .limit(1)
-            .execute()
+            .eq("is_active", True)
         )
+        if chat_id is None:
+            query = query.is_("chat_id", "null")
+        else:
+            query = query.eq("chat_id", chat_id)
+        existing = query.limit(1).execute()
         if existing.data:
-            row = existing.data[0]
-            if invite_link and row.get("invite_link") != invite_link:
+            return existing.data[0]
+
+        if chat_id is not None:
+            legacy = (
+                client.table("campaign_invite_links")
+                .select("*")
+                .eq("cycle_id", cycle_id)
+                .eq("inviter_telegram_id", inviter_telegram_id)
+                .eq("is_active", True)
+                .is_("chat_id", "null")
+                .limit(1)
+                .execute()
+            )
+            if legacy.data:
+                row = legacy.data[0]
                 updated = (
                     client.table("campaign_invite_links")
-                    .update({"invite_link": invite_link})
+                    .update({"chat_id": chat_id})
                     .eq("id", row["id"])
                     .execute()
                 )
                 return updated.data[0] if updated.data else row
-            return row
+
         if not invite_link:
             return None
+
         created = (
             client.table("campaign_invite_links")
             .insert(

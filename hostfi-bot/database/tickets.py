@@ -31,6 +31,40 @@ def _format_ticket_id(ticket_number: int) -> str:
     return f"HSTF-{ticket_number:04d}"
 
 
+def _attach_profiles(client, tickets: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Attach user/admin profile rows to ticket dictionaries."""
+    if not tickets:
+        return tickets
+
+    ids: set[int] = set()
+    for ticket in tickets:
+        user_id = ticket.get("user_telegram_id")
+        admin_id = ticket.get("assigned_admin_id")
+        if user_id:
+            ids.add(int(user_id))
+        if admin_id:
+            ids.add(int(admin_id))
+
+    if not ids:
+        return tickets
+
+    users = (
+        client.table("users")
+        .select("telegram_id,username,first_name")
+        .in_("telegram_id", list(ids))
+        .execute()
+    )
+    profile_map = {int(row["telegram_id"]): row for row in users.data or []}
+    for ticket in tickets:
+        user_id = ticket.get("user_telegram_id")
+        admin_id = ticket.get("assigned_admin_id")
+        if user_id:
+            ticket["user_profile"] = profile_map.get(int(user_id))
+        if admin_id:
+            ticket["admin_profile"] = profile_map.get(int(admin_id))
+    return tickets
+
+
 # ---------------------------------------------------------------------------
 # Create
 # ---------------------------------------------------------------------------
@@ -291,7 +325,7 @@ async def get_open_tickets() -> list[dict[str, Any]]:
         tickets = result.data or []
         for t in tickets:
             t["ticket_id"] = _format_ticket_id(t["ticket_number"])
-        return tickets
+        return _attach_profiles(client, tickets)
 
     try:
         return await asyncio.to_thread(_op)
@@ -426,7 +460,7 @@ async def get_all_active_tickets() -> list[dict[str, Any]]:
         tickets = result.data or []
         for t in tickets:
             t["ticket_id"] = _format_ticket_id(t["ticket_number"])
-        return tickets
+        return _attach_profiles(client, tickets)
 
     try:
         return await asyncio.to_thread(_op)
@@ -467,7 +501,7 @@ async def get_unclaimed_old_tickets(hours: int = 2) -> list[dict[str, Any]]:
         tickets = result.data or []
         for t in tickets:
             t["ticket_id"] = _format_ticket_id(t["ticket_number"])
-        return tickets
+        return _attach_profiles(client, tickets)
 
     try:
         return await asyncio.to_thread(_op)
