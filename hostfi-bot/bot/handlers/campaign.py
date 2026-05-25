@@ -12,7 +12,11 @@ from datetime import datetime, timedelta, timezone
 from telegram import LinkPreviewOptions, Message, Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes
 
-from bot.utils.auto_delete import schedule_any_delete, schedule_command_delete, schedule_delete
+from bot.utils.auto_delete import (
+    schedule_any_delete,
+    schedule_command_delete,
+    schedule_delete,
+)
 from bot.utils.formatter import bullet, field, status_text, title
 from bot.utils.keyboards import (
     campaign_cancel_keyboard,
@@ -36,6 +40,7 @@ from config import (
     COMMUNITY_GROUP_IDS,
     INVITE_RETENTION_HOURS,
     get_invite_target_group_id,
+    is_community_group_chat,
 )
 from database.campaign import (
     XP_HELPFUL,
@@ -139,6 +144,43 @@ async def _send_to_community_groups(bot, **kwargs) -> int:
 def _retention_label() -> str:
     """Return a short label for invite XP retention copy."""
     return f"{INVITE_RETENTION_HOURS} hour" + ("" if INVITE_RETENTION_HOURS == 1 else "s")
+
+
+def _is_community_group_update(update: Update) -> bool:
+    """Return True when an update happened in a configured community group."""
+    chat = update.effective_chat
+    return bool(chat and chat.type in ("group", "supergroup") and is_community_group_chat(chat.id))
+
+
+async def _send_dm_or_group_notice(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    text: str,
+    *,
+    parse_mode: str | None = "HTML",
+    reply_markup=None,
+) -> bool:
+    """Send a DM-first instruction and clean up the public group notice."""
+    if not update.effective_user or not update.effective_message:
+        return False
+    try:
+        await context.bot.send_message(
+            chat_id=update.effective_user.id,
+            text=text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+        notice = await update.effective_message.reply_text("I sent this to your DM.")
+    except Exception:
+        notice = await update.effective_message.reply_text(
+            "Please open a private chat with the bot first, then try again."
+        )
+        await schedule_any_delete(notice, context, 30)
+        await schedule_command_delete(update, context, 30)
+        return False
+    await schedule_any_delete(notice, context, 30)
+    await schedule_command_delete(update, context, 30)
+    return True
 
 
 async def _ensure_user(update: Update) -> int | None:
@@ -766,11 +808,10 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     except Exception as exc:
         logger.warning("Could not DM invite link to %s: %s", user_id, exc)
         reply = await update.effective_message.reply_text(
-            invite_text,
+            "Please open a private chat with the bot first, then use <code>/invite</code> again.",
             parse_mode="HTML",
-            link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        await schedule_delete(reply, context, 60)
+        await schedule_any_delete(reply, context, 30)
     await schedule_command_delete(update, context, 30)
 
 
@@ -835,6 +876,25 @@ async def invites_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             f"<code>{html.escape(link or stats.get('invite_link') or '')}</code>",
         ]
     )
+    if _is_community_group_update(update):
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=text,
+                parse_mode="HTML",
+                reply_markup=campaign_home_keyboard(),
+                link_preview_options=LinkPreviewOptions(is_disabled=True),
+            )
+            notice = await update.effective_message.reply_text("I sent your invite stats to DM.")
+        except Exception:
+            notice = await update.effective_message.reply_text(
+                "Please open a private chat with the bot first, then try <code>/invites</code> again.",
+                parse_mode="HTML",
+            )
+        await schedule_any_delete(notice, context, 30)
+        await schedule_command_delete(update, context, 30)
+        return
+
     reply = await update.effective_message.reply_text(
         text,
         parse_mode="HTML",
@@ -849,6 +909,14 @@ async def xlink_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     """Start X account linking with a verification code."""
     if not update.effective_message:
         return
+    if _is_community_group_update(update):
+        handle = context.args[0] if context.args else "@yourhandle"
+        await _send_dm_or_group_notice(
+            update,
+            context,
+            f"Start X linking here with:\n<code>/xlink {html.escape(handle)}</code>",
+        )
+        return
     if not context.args:
         await update.effective_message.reply_text(
             "Usage: <code>/xlink @yourhandle</code>", parse_mode="HTML"
@@ -860,6 +928,13 @@ async def xlink_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def xverify_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Verify a user's X account by checking a verification post."""
     if not update.effective_message:
+        return
+    if _is_community_group_update(update):
+        await _send_dm_or_group_notice(
+            update,
+            context,
+            "Verify your X account here with:\n<code>/xverify YOUR_VERIFICATION_POST_URL</code>",
+        )
         return
     if not context.args:
         await update.effective_message.reply_text(
@@ -919,6 +994,13 @@ async def raid_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if subcommand == "create":
         await _raid_create(update, context)
     elif subcommand == "submit":
+        if _is_community_group_update(update):
+            await _send_dm_or_group_notice(
+                update,
+                context,
+                "Submit raid proof privately with:\n<code>/raid submit RAID_ID YOUR_X_PROOF_URL</code>",
+            )
+            return
         await _raid_submit(update, context)
     else:
         await update.effective_message.reply_text(status_text("error", "Unknown raid command. Use create or submit."))
@@ -1016,6 +1098,13 @@ async def _raid_submit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 async def xpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Submit a personal HostFi-related X post for admin review."""
     if not update.effective_message:
+        return
+    if _is_community_group_update(update):
+        await _send_dm_or_group_notice(
+            update,
+            context,
+            "Submit your X post privately with:\n<code>/xpost YOUR_X_POST_URL</code>",
+        )
         return
     if not context.args:
         await update.effective_message.reply_text(
@@ -1227,13 +1316,14 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         return
 
     visible_xp = event.get("new_total", 0)
-    await update.effective_message.reply_text(
+    reply = await update.effective_message.reply_text(
         title("XP Updated", "✅")
         + f"\n\n{field('User', target_display)}"
         + f"\n{field('Change', f'<b>{signed_amount:+,}</b>')}"
         + f"\n{field('Visible XP', f'<b>{visible_xp:,}</b>')}",
         parse_mode="HTML",
     )
+    await schedule_any_delete(reply, context, 30)
     await log_action(
         f"xp_{event_type}",
         update.effective_user.id,
@@ -1480,31 +1570,77 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
         return
 
     if data == "campaign_xlink_start":
-        _set_pending(context, {"type": "xlink_handle", "chat_id": query.message.chat_id})
-        reply = await query.message.reply_text(
-            "Send your X handle now, like <code>@yourhandle</code>.",
-            parse_mode="HTML",
-            reply_markup=campaign_cancel_keyboard(),
-        )
-        await schedule_delete(reply, context, 60)
+        prompt = "Send your X handle now, like <code>@yourhandle</code>."
+        if query.message.chat.type in ("group", "supergroup") and is_community_group_chat(query.message.chat_id):
+            _set_pending(context, {"type": "xlink_handle", "chat_id": query.from_user.id})
+            try:
+                await context.bot.send_message(
+                    query.from_user.id,
+                    prompt,
+                    parse_mode="HTML",
+                    reply_markup=campaign_cancel_keyboard(),
+                )
+                notice = await query.message.reply_text("I sent this to your DM.")
+            except Exception:
+                _clear_pending(context)
+                notice = await query.message.reply_text("Please open a private chat with the bot first, then try again.")
+            await schedule_any_delete(notice, context, 30)
+        else:
+            _set_pending(context, {"type": "xlink_handle", "chat_id": query.message.chat_id})
+            reply = await query.message.reply_text(
+                prompt,
+                parse_mode="HTML",
+                reply_markup=campaign_cancel_keyboard(),
+            )
+            await schedule_delete(reply, context, 60)
         return
 
     if data == "campaign_xverify_start":
-        _set_pending(context, {"type": "xverify", "chat_id": query.message.chat_id})
-        reply = await query.message.reply_text(
-            "Send the X post URL that contains your verification code.",
-            reply_markup=campaign_cancel_keyboard(),
-        )
-        await schedule_delete(reply, context, 60)
+        prompt = "Send the X post URL that contains your verification code."
+        if query.message.chat.type in ("group", "supergroup") and is_community_group_chat(query.message.chat_id):
+            _set_pending(context, {"type": "xverify", "chat_id": query.from_user.id})
+            try:
+                await context.bot.send_message(
+                    query.from_user.id,
+                    prompt,
+                    reply_markup=campaign_cancel_keyboard(),
+                )
+                notice = await query.message.reply_text("I sent this to your DM.")
+            except Exception:
+                _clear_pending(context)
+                notice = await query.message.reply_text("Please open a private chat with the bot first, then try again.")
+            await schedule_any_delete(notice, context, 30)
+        else:
+            _set_pending(context, {"type": "xverify", "chat_id": query.message.chat_id})
+            reply = await query.message.reply_text(
+                prompt,
+                reply_markup=campaign_cancel_keyboard(),
+            )
+            await schedule_delete(reply, context, 60)
         return
 
     if data == "campaign_xpost_start":
-        _set_pending(context, {"type": "xpost", "chat_id": query.message.chat_id})
-        reply = await query.message.reply_text(
-            "Send your HostFi-related X post URL. Admins will review it before XP is awarded.",
-            reply_markup=campaign_cancel_keyboard(),
-        )
-        await schedule_delete(reply, context, 60)
+        prompt = "Send your HostFi-related X post URL. Admins will review it before XP is awarded."
+        if query.message.chat.type in ("group", "supergroup") and is_community_group_chat(query.message.chat_id):
+            _set_pending(context, {"type": "xpost", "chat_id": query.from_user.id})
+            try:
+                await context.bot.send_message(
+                    query.from_user.id,
+                    prompt,
+                    reply_markup=campaign_cancel_keyboard(),
+                )
+                notice = await query.message.reply_text("I sent this to your DM.")
+            except Exception:
+                _clear_pending(context)
+                notice = await query.message.reply_text("Please open a private chat with the bot first, then try again.")
+            await schedule_any_delete(notice, context, 30)
+        else:
+            _set_pending(context, {"type": "xpost", "chat_id": query.message.chat_id})
+            reply = await query.message.reply_text(
+                prompt,
+                reply_markup=campaign_cancel_keyboard(),
+            )
+            await schedule_delete(reply, context, 60)
         return
 
     if data.startswith("campaign_raid_submit_"):
@@ -1513,13 +1649,29 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
         except ValueError:
             await query.message.reply_text(status_text("error", "Invalid raid button."))
             return
-        _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.message.chat_id})
-        reply = await query.message.reply_text(
-            f"Send your X proof URL for <b>Raid #{raid_id}</b>.",
-            parse_mode="HTML",
-            reply_markup=campaign_cancel_keyboard(),
-        )
-        await schedule_delete(reply, context, 60)
+        prompt = f"Send your X proof URL for <b>Raid #{raid_id}</b>."
+        if query.message.chat.type in ("group", "supergroup") and is_community_group_chat(query.message.chat_id):
+            _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.from_user.id})
+            try:
+                await context.bot.send_message(
+                    query.from_user.id,
+                    prompt,
+                    parse_mode="HTML",
+                    reply_markup=campaign_cancel_keyboard(),
+                )
+                notice = await query.message.reply_text("I sent the raid proof prompt to your DM.")
+            except Exception:
+                _clear_pending(context)
+                notice = await query.message.reply_text("Please open a private chat with the bot first, then try again.")
+            await schedule_any_delete(notice, context, 30)
+        else:
+            _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.message.chat_id})
+            reply = await query.message.reply_text(
+                prompt,
+                parse_mode="HTML",
+                reply_markup=campaign_cancel_keyboard(),
+            )
+            await schedule_delete(reply, context, 60)
         return
 
     if data.startswith("campaign_raid_help_"):

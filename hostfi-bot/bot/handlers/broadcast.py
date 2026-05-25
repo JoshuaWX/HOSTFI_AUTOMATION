@@ -13,6 +13,7 @@ from datetime import datetime, timedelta, timezone
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update
 from telegram.ext import ContextTypes, ConversationHandler, filters
 
+from bot.utils.auto_delete import schedule_any_delete, schedule_command_delete, schedule_delete
 from bot.utils.formatter import bullet, field, status_text, title
 from bot.utils.keyboards import confirm_broadcast_keyboard
 from bot.utils.permissions import is_admin
@@ -117,9 +118,10 @@ async def rank_command(
         user_id = update.effective_user.id
 
         if not await check_rate_limit(user_id, "command", limit=10, window=60):
-            await update.effective_message.reply_text(
+            msg = await update.effective_message.reply_text(
                 status_text("warning", "Too many requests. Please wait a moment.")
             )
+            await schedule_any_delete(msg, context, 15)
             return
 
         xp, rank, total, cycle = await get_campaign_rank(user_id)
@@ -161,13 +163,16 @@ async def rank_command(
         )
         msg = "\n".join(lines)
 
-        await update.effective_message.reply_text(msg, parse_mode="HTML")
+        reply = await update.effective_message.reply_text(msg, parse_mode="HTML")
+        await schedule_delete(reply, context, 60)
+        await schedule_command_delete(update, context, 60)
 
     except Exception as exc:
         logger.error("Error in rank_command: %s", exc)
-        await update.effective_message.reply_text(
+        msg = await update.effective_message.reply_text(
             status_text("warning", "Something went wrong. Please try again later.")
         )
+        await schedule_any_delete(msg, context, 15)
 
 
 # ---------------------------------------------------------------------------
@@ -192,17 +197,19 @@ async def leaderboard_command(
         user_id = update.effective_user.id
 
         if not await check_rate_limit(user_id, "command", limit=10, window=60):
-            await update.effective_message.reply_text(
+            msg = await update.effective_message.reply_text(
                 status_text("warning", "Too many requests. Please wait a moment.")
             )
+            await schedule_any_delete(msg, context, 15)
             return
 
         top_users = await get_campaign_leaderboard(10)
 
         if not top_users:
-            await update.effective_message.reply_text(
+            msg = await update.effective_message.reply_text(
                 status_text("info", "No campaign leaderboard data yet. Earn XP through raids, invites, posts, and approved helpful contributions.")
             )
+            await schedule_delete(msg, context, 90)
             return
 
         lines: list[str] = [title("XP Leaderboard", "🏅"), ""]
@@ -217,15 +224,18 @@ async def leaderboard_command(
         lines.append("")
         lines.append("Campaign ties are ranked by earliest approved XP event.")
 
-        await update.effective_message.reply_text(
+        reply = await update.effective_message.reply_text(
             "\n".join(lines), parse_mode="HTML"
         )
+        await schedule_delete(reply, context, 90)
+        await schedule_command_delete(update, context, 90)
 
     except Exception as exc:
         logger.error("Error in leaderboard_command: %s", exc)
-        await update.effective_message.reply_text(
+        msg = await update.effective_message.reply_text(
             status_text("warning", "Something went wrong. Please try again later.")
         )
+        await schedule_any_delete(msg, context, 15)
 
 
 # ---------------------------------------------------------------------------

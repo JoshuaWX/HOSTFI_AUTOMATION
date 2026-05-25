@@ -9,9 +9,9 @@ import logging
 from datetime import datetime, timezone
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.ext import ContextTypes, ConversationHandler
+from telegram.ext import ApplicationHandlerStop, ContextTypes, ConversationHandler
 
-from bot.utils.auto_delete import schedule_error_delete
+from bot.utils.auto_delete import schedule_any_delete, schedule_command_delete, schedule_error_delete
 from bot.utils.formatter import field, status_text, title
 from bot.utils.keyboards import rating_keyboard, ticket_keyboard
 from bot.utils.permissions import is_admin, is_admin_channel_chat
@@ -116,6 +116,7 @@ def _replace_claim_status(text: str, admin_link: str) -> str:
 # ---------------------------------------------------------------------------
 
 TICKET_DESCRIPTION = 0
+SUPPORT_PENDING_DM_KEY = "support_pending_dm"
 
 
 # ---------------------------------------------------------------------------
@@ -144,11 +145,26 @@ async def support_command(
             return ConversationHandler.END
 
         if update.effective_chat and update.effective_chat.type != "private":
-            await _reply_error(
-                update,
-                context,
-                status_text("error", "/support is available in DM only. Please message the bot privately."),
-            )
+            try:
+                await context.bot.send_message(
+                    chat_id=update.effective_user.id,
+                    text=(
+                        f"{title('HOSTFI Support', '🎫')}\n\n"
+                        "Please briefly describe your issue in a single message.\n\n"
+                        "<i>Be specific to help our team resolve it faster.</i>\n\n"
+                        "Send <code>/cancel</code> to abort."
+                    ),
+                    parse_mode="HTML",
+                )
+                context.user_data[SUPPORT_PENDING_DM_KEY] = True
+                notice = await update.effective_message.reply_text("I sent the support prompt to your DM.")
+            except Exception:
+                notice = await update.effective_message.reply_text(
+                    "Please open a private chat with the bot first, then use <code>/support</code>.",
+                    parse_mode="HTML",
+                )
+            await schedule_any_delete(notice, context, 30)
+            await schedule_command_delete(update, context, 30)
             return ConversationHandler.END
 
         user_id = update.effective_user.id
@@ -190,6 +206,22 @@ async def support_command(
     except Exception as exc:
         logger.error("Error in support_command: %s", exc)
         return ConversationHandler.END
+
+
+async def support_pending_dm_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Create a ticket from the pending DM prompt started in a group."""
+    if not context.user_data.get(SUPPORT_PENDING_DM_KEY):
+        return
+    if not update.effective_chat or update.effective_chat.type != "private":
+        return
+    if update.effective_message and update.effective_message.text == "/cancel":
+        context.user_data.pop(SUPPORT_PENDING_DM_KEY, None)
+        await update.effective_message.reply_text(status_text("info", "Ticket creation cancelled."))
+        raise ApplicationHandlerStop
+    result = await ticket_receive_description(update, context)
+    if result == ConversationHandler.END:
+        context.user_data.pop(SUPPORT_PENDING_DM_KEY, None)
+    raise ApplicationHandlerStop
 
 
 # ---------------------------------------------------------------------------

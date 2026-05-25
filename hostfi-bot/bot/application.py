@@ -368,6 +368,7 @@ def _register_message_handlers(app: Application) -> None:
         new_member_handler,
     )
     from bot.handlers.campaign import campaign_guided_input_handler
+    from bot.handlers.tickets import support_pending_dm_handler
 
     # New member join events
     app.add_handler(
@@ -381,6 +382,18 @@ def _register_message_handlers(app: Application) -> None:
         MessageHandler(
             filters.StatusUpdate.LEFT_CHAT_MEMBER, left_member_handler
         )
+    )
+
+    # Campaign button flows consume the user's next text message when pending.
+    app.add_handler(
+        MessageHandler(
+            filters.ChatType.PRIVATE
+            & filters.TEXT
+            & ~filters.COMMAND
+            & ~filters.StatusUpdate.ALL,
+            support_pending_dm_handler,
+        ),
+        group=1,
     )
 
     # Campaign button flows consume the user's next text message when pending.

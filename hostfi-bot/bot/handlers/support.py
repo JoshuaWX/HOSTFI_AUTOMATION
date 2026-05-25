@@ -11,6 +11,7 @@ import time
 from telegram import Update
 from telegram.ext import ContextTypes
 
+from bot.utils.auto_delete import schedule_any_delete, schedule_command_delete
 from bot.utils.formatter import field, status_text, title
 from bot.utils.rate_limiter import check_rate_limit
 from config import ADMIN_CHANNEL_ID
@@ -87,22 +88,52 @@ async def ask_command(
 
     # --- 1. Extract question ------------------------------------------------
     question = " ".join(context.args) if context.args else ""
+    is_dm = update.effective_chat.type == "private"
 
     if not question.strip():
-        await update.message.reply_text(
+        msg = await update.message.reply_text(
             "<b>Usage</b>\n"
             "<code>/ask your question here</code>\n\n"
             "Example: <code>/ask How do I fund my virtual card?</code>",
             parse_mode="HTML",
         )
+        await schedule_any_delete(msg, context, 15)
+        await schedule_command_delete(update, context, 15)
         return
+
+    response_chat_id = update.effective_chat.id
+    if not is_dm:
+        response_chat_id = user.id
+        try:
+            await context.bot.send_message(
+                chat_id=user.id,
+                text=status_text("info", "I’ll answer your question here in DM."),
+            )
+            notice = await update.message.reply_text("I sent this to your DM.")
+        except Exception:
+            notice = await update.message.reply_text(
+                "Please open a private chat with the bot first, then try <code>/ask</code> again.",
+                parse_mode="HTML",
+            )
+            await schedule_any_delete(notice, context, 30)
+            await schedule_command_delete(update, context, 30)
+            return
+        await schedule_any_delete(notice, context, 30)
+        await schedule_command_delete(update, context, 30)
+
+    async def send_response(text: str, parse_mode: str | None = None) -> None:
+        await context.bot.send_message(
+            chat_id=response_chat_id,
+            text=text,
+            parse_mode=parse_mode,
+        )
 
     # --- 2. Rate limit (5 per hour) -----------------------------------------
     allowed = await check_rate_limit(
         user.id, action="ai_query", limit=5, window=3600
     )
     if not allowed:
-        await update.message.reply_text(
+        await send_response(
             status_text("warning", "You've reached the AI query limit of 5 per hour. Please try again later.")
         )
         return
@@ -110,12 +141,11 @@ async def ask_command(
     # Show typing indicator while processing
     chat_action_start = time.perf_counter()
     await context.bot.send_chat_action(
-        chat_id=update.effective_chat.id, action="typing"
+        chat_id=response_chat_id, action="typing"
     )
     chat_action_ms = (time.perf_counter() - chat_action_start) * 1000
 
     # --- 3. Check if DM and fetch conversation history ----------------------
-    is_dm = update.effective_chat.type == "private"
     session_id = None
     conversation_history = ""
 
@@ -159,9 +189,7 @@ async def ask_command(
                         "Failed to send emergency alert: %s", exc
                     )
 
-            await update.message.reply_text(
-                guardrail.message, parse_mode="HTML"
-            )
+            await send_response(guardrail.message, parse_mode="HTML")
 
             total_ms = (time.perf_counter() - total_start) * 1000
             logger.info(
@@ -213,7 +241,7 @@ async def ask_command(
             response = response[:3997] + "..."
 
         reply_start = time.perf_counter()
-        await update.message.reply_text(response, parse_mode="HTML")
+        await send_response(response, parse_mode="HTML")
         reply_ms = (time.perf_counter() - reply_start) * 1000
 
         # --- 8. Save DM conversation history if in private chat ---------------
@@ -263,7 +291,7 @@ async def ask_command(
         logger.error(
             "AI support handler error for user %s: %s", user.id, exc
         )
-        await update.message.reply_text(
+        await send_response(
             status_text("error", "Sorry, I encountered an error processing your question. Please try again or contact HOSTFI support directly.")
         )
 

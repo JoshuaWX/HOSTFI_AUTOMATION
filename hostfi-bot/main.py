@@ -136,10 +136,7 @@ async def lifespan(app: FastAPI):
     group_commands = [
         BotCommand("help", "Show available commands"),
         BotCommand("rules", "View community rules"),
-        BotCommand("ask", "Ask the AI assistant"),
         BotCommand("campaign", "Current XP campaign"),
-        BotCommand("invite", "Your campaign invite link"),
-        BotCommand("invites", "Your invite stats"),
         BotCommand("raids", "View active raids"),
         BotCommand("leaderboard", "Community leaderboard"),
     ]

@@ -106,3 +106,39 @@ async def schedule_command_delete(
     if not message:
         return
     await schedule_any_delete(message, context, delay)
+
+
+def is_group_message(message: Message | None) -> bool:
+    """Return True when a message belongs to a group/supergroup."""
+    return bool(message and message.chat.type in ("group", "supergroup"))
+
+
+async def send_dm_redirect_notice(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    success_text: str = "Sent this to your DM.",
+    failure_text: str = "Please open a private chat with the bot first, then try again.",
+    delay: int = 30,
+) -> bool:
+    """
+    Post a temporary group notice after a DM-first command.
+
+    Returns True when the caller should continue with DM handling, False when
+    the bot likely cannot DM the user.
+    """
+    message = update.effective_message
+    if not message or not is_group_message(message):
+        return True
+
+    text = success_text
+    try:
+        if update.effective_user:
+            await context.bot.send_chat_action(chat_id=update.effective_user.id, action="typing")
+    except Exception:
+        text = failure_text
+
+    notice = await message.reply_text(text)
+    await schedule_any_delete(notice, context, delay)
+    await schedule_command_delete(update, context, delay)
+    return text == success_text

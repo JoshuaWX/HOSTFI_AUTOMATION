@@ -591,8 +591,8 @@ HELP_TEXT = "\n".join(
         "",
         title("Core"),
         bullet("<code>/rules</code> — Community rules"),
-        bullet("<code>/ask</code> — Ask the AI assistant"),
-        bullet("<code>/support</code> — Open a support ticket"),
+        bullet("<code>/ask</code> — AI support in DM"),
+        bullet("<code>/support</code> — Open a ticket in DM"),
         "",
         title("Campaign"),
         bullet("<code>/campaign</code> — Open the XP panel"),
@@ -615,4 +615,4 @@ async def help_command(
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
-    await schedule_delete(msg, context, 30)
+    await schedule_delete(msg, context, 60)

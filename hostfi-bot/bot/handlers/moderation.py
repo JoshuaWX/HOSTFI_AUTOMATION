@@ -786,7 +786,7 @@ async def rules_command(
         format_rules(),
         parse_mode="HTML",
     )
-    await schedule_delete(msg, context, 30)
+    await schedule_delete(msg, context, 60)
 
 
 # ---------------------------------------------------------------------------
