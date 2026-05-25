@@ -399,6 +399,7 @@ def _register_message_handlers(app: Application) -> None:
             & ~filters.COMMAND
             & ~filters.StatusUpdate.ALL,
             support_pending_dm_handler,
+            block=False,
         ),
         group=1,
     )
