@@ -14,7 +14,11 @@ from telegram.ext import ContextTypes
 
 from bot.filters.scam_filter import run_scam_checks
 from bot.filters.spam_filter import run_spam_checks
-from bot.utils.auto_delete import schedule_delete
+from bot.utils.auto_delete import (
+    schedule_any_delete,
+    schedule_command_delete,
+    schedule_delete,
+)
 from bot.utils.formatter import (
     bullet,
     field,
@@ -30,7 +34,7 @@ from bot.utils.keyboards import (
     verification_keyboard,
     welcome_keyboard,
 )
-from bot.utils.permissions import get_admin_ids, is_admin
+from bot.utils.permissions import get_admin_ids, is_admin, is_admin_channel_chat
 from bot.utils.rate_limiter import check_rate_limit, get_redis
 from config import ADMIN_CHANNEL_ID, MAX_MESSAGES_PER_MINUTE
 from database.logs import log_action
@@ -574,34 +578,105 @@ async def help_callback(
         return
 
     await query.answer()
-    await query.message.reply_text(
-        HELP_TEXT,
+    chat = query.message.chat if query.message else None
+    chat_id = chat.id if chat else None
+    chat_type = chat.type if chat else None
+    msg = await query.message.reply_text(
+        _help_text_for_chat(chat_id, chat_type),
         parse_mode="HTML",
-        reply_markup=campaign_home_keyboard(),
+        reply_markup=_help_keyboard_for_chat(chat_id, chat_type),
     )
+    if chat_type in ("group", "supergroup"):
+        await schedule_any_delete(msg, context, 90)
 
 
 # ---------------------------------------------------------------------------
 # /help command
 # ---------------------------------------------------------------------------
 
-HELP_TEXT = "\n".join(
+PRIVATE_HELP_TEXT = "\n".join(
     [
         title("HOSTFI Bot", "📚"),
         "",
-        title("Core"),
-        bullet("<code>/rules</code> — Community rules"),
-        bullet("<code>/ask</code> — AI support in DM"),
-        bullet("<code>/support</code> — Open a ticket in DM"),
+        "Your private workspace for support, campaign actions, and X verification.",
+        "",
+        title("Support"),
+        bullet("<code>/ask</code> — Ask the AI assistant"),
+        bullet("<code>/support</code> — Open a support ticket"),
         "",
         title("Campaign"),
         bullet("<code>/campaign</code> — Open the XP panel"),
-        bullet("<code>/rank</code> — View your rank"),
+        bullet("<code>/xp</code> — View your campaign XP"),
+        bullet("<code>/rank</code> — View your leaderboard rank"),
         bullet("<code>/leaderboard</code> — View top members"),
+        bullet("<code>/invite</code> — Get your invite link"),
+        bullet("<code>/invites</code> — View invite stats"),
+        bullet("<code>/raids</code> — View active raids"),
+        "",
+        title("X Account"),
+        bullet("<code>/xlink @handle</code> — Start account linking"),
+        bullet("<code>/xverify URL</code> — Verify your X account"),
+        bullet("<code>/xpost URL</code> — Submit a post for admin review"),
+        "",
+        title("Community"),
+        bullet("<code>/rules</code> — Read the group rules"),
         "",
         "Use the buttons below for campaign actions.",
     ]
 )
+
+GROUP_HELP_TEXT = "\n".join(
+    [
+        title("HOSTFI Bot", "📚"),
+        "",
+        "Group-safe commands stay public. Private flows continue in DM.",
+        "",
+        title("Campaign"),
+        bullet("<code>/campaign</code> — Open the XP panel"),
+        bullet("<code>/raids</code> — View active raids"),
+        bullet("<code>/leaderboard</code> — View top members"),
+        bullet("<code>/rank</code> — View your rank"),
+        bullet("<code>/xp</code> — View your XP"),
+        "",
+        title("Community"),
+        bullet("<code>/rules</code> — Read the group rules"),
+        "",
+        "Invite links, support, AI answers, X linking, X posts, and raid proof submissions happen in DM.",
+    ]
+)
+
+ADMIN_HELP_TEXT = "\n".join(
+    [
+        title("HOSTFI Admin", "📚"),
+        "",
+        "Quick admin pointers. Use <code>/adminhelp</code> for the full reference.",
+        "",
+        title("Operations"),
+        bullet("<code>/tickets</code> — View active tickets"),
+        bullet("<code>/stats</code> — View bot stats"),
+        bullet("<code>/cycle</code> — Manage campaign cycles"),
+        bullet("<code>/raid create</code> — Create a raid"),
+        bullet("<code>/award helpful</code> — Award helpful XP"),
+        bullet("<code>/invites @username</code> — View invite stats"),
+        bullet("<code>/xp add|deduct|disqualify</code> — Adjust campaign XP"),
+    ]
+)
+
+
+def _help_text_for_chat(chat_id: int | None, chat_type: str | None) -> str:
+    """Return the correct help copy for the current chat context."""
+    if chat_type == "private":
+        return PRIVATE_HELP_TEXT
+    if is_admin_channel_chat(chat_id):
+        return ADMIN_HELP_TEXT
+    return GROUP_HELP_TEXT
+
+
+def _help_keyboard_for_chat(chat_id: int | None, chat_type: str | None):
+    """Return campaign buttons only where they make sense."""
+    if is_admin_channel_chat(chat_id):
+        return None
+    return campaign_home_keyboard()
 
 
 async def help_command(
@@ -610,9 +685,14 @@ async def help_command(
     """Handle /help — display available commands."""
     if not update.effective_message:
         return
+    chat = update.effective_chat
+    chat_id = chat.id if chat else None
+    chat_type = chat.type if chat else None
     msg = await update.effective_message.reply_text(
-        HELP_TEXT,
+        _help_text_for_chat(chat_id, chat_type),
         parse_mode="HTML",
-        reply_markup=campaign_home_keyboard(),
+        reply_markup=_help_keyboard_for_chat(chat_id, chat_type),
     )
-    await schedule_delete(msg, context, 60)
+    if chat_type in ("group", "supergroup"):
+        await schedule_any_delete(msg, context, 90)
+        await schedule_command_delete(update, context, 90)

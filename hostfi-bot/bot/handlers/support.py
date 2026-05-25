@@ -11,7 +11,11 @@ import time
 from telegram import Update
 from telegram.ext import ContextTypes
 
-from bot.utils.auto_delete import schedule_any_delete, schedule_command_delete
+from bot.utils.auto_delete import (
+    schedule_any_delete,
+    schedule_command_delete,
+    send_dm_redirect_status,
+)
 from bot.utils.formatter import field, status_text, title
 from bot.utils.rate_limiter import check_rate_limit
 from config import ADMIN_CHANNEL_ID
@@ -109,17 +113,10 @@ async def ask_command(
                 chat_id=user.id,
                 text=status_text("info", "I’ll answer your question here in DM."),
             )
-            notice = await update.message.reply_text("I sent this to your DM.")
         except Exception:
-            notice = await update.message.reply_text(
-                "Please open a private chat with the bot first, then try <code>/ask</code> again.",
-                parse_mode="HTML",
-            )
-            await schedule_any_delete(notice, context, 30)
-            await schedule_command_delete(update, context, 30)
+            await send_dm_redirect_status(update, context, dm_sent=False)
             return
-        await schedule_any_delete(notice, context, 30)
-        await schedule_command_delete(update, context, 30)
+        await send_dm_redirect_status(update, context, dm_sent=True)
 
     async def send_response(text: str, parse_mode: str | None = None) -> None:
         await context.bot.send_message(

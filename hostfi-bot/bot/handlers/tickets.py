@@ -11,7 +11,10 @@ from datetime import datetime, timezone
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationHandlerStop, ContextTypes, ConversationHandler
 
-from bot.utils.auto_delete import schedule_any_delete, schedule_command_delete, schedule_error_delete
+from bot.utils.auto_delete import (
+    schedule_error_delete,
+    send_dm_redirect_status,
+)
 from bot.utils.formatter import field, status_text, title
 from bot.utils.keyboards import rating_keyboard, ticket_keyboard
 from bot.utils.permissions import is_admin, is_admin_channel_chat
@@ -157,14 +160,10 @@ async def support_command(
                     parse_mode="HTML",
                 )
                 context.user_data[SUPPORT_PENDING_DM_KEY] = True
-                notice = await update.effective_message.reply_text("I sent the support prompt to your DM.")
             except Exception:
-                notice = await update.effective_message.reply_text(
-                    "Please open a private chat with the bot first, then use <code>/support</code>.",
-                    parse_mode="HTML",
-                )
-            await schedule_any_delete(notice, context, 30)
-            await schedule_command_delete(update, context, 30)
+                await send_dm_redirect_status(update, context, dm_sent=False)
+                return ConversationHandler.END
+            await send_dm_redirect_status(update, context, dm_sent=True)
             return ConversationHandler.END
 
         user_id = update.effective_user.id

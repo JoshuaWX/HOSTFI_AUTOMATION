@@ -14,6 +14,11 @@ from config import is_community_group_chat
 
 logger = logging.getLogger(__name__)
 
+DM_REDIRECT_SUCCESS_TEXT = "Can’t use this feature in the group chat. Check your DM."
+DM_REDIRECT_FAILURE_TEXT = (
+    "Can’t DM you yet. Open the bot in private chat, tap Start, then try again."
+)
+
 
 async def _delete_message_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     """Job callback that deletes a scheduled message."""
@@ -117,8 +122,8 @@ async def send_dm_redirect_notice(
     update: Update,
     context: ContextTypes.DEFAULT_TYPE,
     *,
-    success_text: str = "Sent this to your DM.",
-    failure_text: str = "Please open a private chat with the bot first, then try again.",
+    success_text: str = DM_REDIRECT_SUCCESS_TEXT,
+    failure_text: str = DM_REDIRECT_FAILURE_TEXT,
     delay: int = 30,
 ) -> bool:
     """
@@ -142,3 +147,22 @@ async def send_dm_redirect_notice(
     await schedule_any_delete(notice, context, delay)
     await schedule_command_delete(update, context, delay)
     return text == success_text
+
+
+async def send_dm_redirect_status(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    dm_sent: bool,
+    delay: int = 30,
+) -> None:
+    """Post the standard temporary DM redirect result in a group chat."""
+    message = update.effective_message
+    if not message or not is_group_message(message):
+        return
+
+    notice = await message.reply_text(
+        DM_REDIRECT_SUCCESS_TEXT if dm_sent else DM_REDIRECT_FAILURE_TEXT
+    )
+    await schedule_any_delete(notice, context, delay)
+    await schedule_command_delete(update, context, delay)

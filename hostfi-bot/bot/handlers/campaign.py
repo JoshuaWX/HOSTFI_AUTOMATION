@@ -16,6 +16,7 @@ from bot.utils.auto_delete import (
     schedule_any_delete,
     schedule_command_delete,
     schedule_delete,
+    send_dm_redirect_status,
 )
 from bot.utils.formatter import bullet, field, status_text, title
 from bot.utils.keyboards import (
@@ -170,16 +171,10 @@ async def _send_dm_or_group_notice(
             parse_mode=parse_mode,
             reply_markup=reply_markup,
         )
-        notice = await update.effective_message.reply_text("I sent this to your DM.")
     except Exception:
-        notice = await update.effective_message.reply_text(
-            "Please open a private chat with the bot first, then try again."
-        )
-        await schedule_any_delete(notice, context, 30)
-        await schedule_command_delete(update, context, 30)
+        await send_dm_redirect_status(update, context, dm_sent=False)
         return False
-    await schedule_any_delete(notice, context, 30)
-    await schedule_command_delete(update, context, 30)
+    await send_dm_redirect_status(update, context, dm_sent=True)
     return True
 
 
@@ -803,16 +798,11 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
             parse_mode="HTML",
             link_preview_options=LinkPreviewOptions(is_disabled=True),
         )
-        reply = await update.effective_message.reply_text(status_text("success", "Invite link sent in DM."))
-        await schedule_any_delete(reply, context, 30)
     except Exception as exc:
         logger.warning("Could not DM invite link to %s: %s", user_id, exc)
-        reply = await update.effective_message.reply_text(
-            "Please open a private chat with the bot first, then use <code>/invite</code> again.",
-            parse_mode="HTML",
-        )
-        await schedule_any_delete(reply, context, 30)
-    await schedule_command_delete(update, context, 30)
+        await send_dm_redirect_status(update, context, dm_sent=False)
+        return
+    await send_dm_redirect_status(update, context, dm_sent=True)
 
 
 async def invites_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -885,14 +875,10 @@ async def invites_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
                 reply_markup=campaign_home_keyboard(),
                 link_preview_options=LinkPreviewOptions(is_disabled=True),
             )
-            notice = await update.effective_message.reply_text("I sent your invite stats to DM.")
         except Exception:
-            notice = await update.effective_message.reply_text(
-                "Please open a private chat with the bot first, then try <code>/invites</code> again.",
-                parse_mode="HTML",
-            )
-        await schedule_any_delete(notice, context, 30)
-        await schedule_command_delete(update, context, 30)
+            await send_dm_redirect_status(update, context, dm_sent=False)
+            return
+        await send_dm_redirect_status(update, context, dm_sent=True)
         return
 
     reply = await update.effective_message.reply_text(
@@ -1580,11 +1566,11 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
                     parse_mode="HTML",
                     reply_markup=campaign_cancel_keyboard(),
                 )
-                notice = await query.message.reply_text("I sent this to your DM.")
             except Exception:
                 _clear_pending(context)
-                notice = await query.message.reply_text("Please open a private chat with the bot first, then try again.")
-            await schedule_any_delete(notice, context, 30)
+                await send_dm_redirect_status(update, context, dm_sent=False)
+                return
+            await send_dm_redirect_status(update, context, dm_sent=True)
         else:
             _set_pending(context, {"type": "xlink_handle", "chat_id": query.message.chat_id})
             reply = await query.message.reply_text(
@@ -1605,11 +1591,11 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
                     prompt,
                     reply_markup=campaign_cancel_keyboard(),
                 )
-                notice = await query.message.reply_text("I sent this to your DM.")
             except Exception:
                 _clear_pending(context)
-                notice = await query.message.reply_text("Please open a private chat with the bot first, then try again.")
-            await schedule_any_delete(notice, context, 30)
+                await send_dm_redirect_status(update, context, dm_sent=False)
+                return
+            await send_dm_redirect_status(update, context, dm_sent=True)
         else:
             _set_pending(context, {"type": "xverify", "chat_id": query.message.chat_id})
             reply = await query.message.reply_text(
@@ -1629,11 +1615,11 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
                     prompt,
                     reply_markup=campaign_cancel_keyboard(),
                 )
-                notice = await query.message.reply_text("I sent this to your DM.")
             except Exception:
                 _clear_pending(context)
-                notice = await query.message.reply_text("Please open a private chat with the bot first, then try again.")
-            await schedule_any_delete(notice, context, 30)
+                await send_dm_redirect_status(update, context, dm_sent=False)
+                return
+            await send_dm_redirect_status(update, context, dm_sent=True)
         else:
             _set_pending(context, {"type": "xpost", "chat_id": query.message.chat_id})
             reply = await query.message.reply_text(
@@ -1659,11 +1645,11 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
                     parse_mode="HTML",
                     reply_markup=campaign_cancel_keyboard(),
                 )
-                notice = await query.message.reply_text("I sent the raid proof prompt to your DM.")
             except Exception:
                 _clear_pending(context)
-                notice = await query.message.reply_text("Please open a private chat with the bot first, then try again.")
-            await schedule_any_delete(notice, context, 30)
+                await send_dm_redirect_status(update, context, dm_sent=False)
+                return
+            await send_dm_redirect_status(update, context, dm_sent=True)
         else:
             _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.message.chat_id})
             reply = await query.message.reply_text(
