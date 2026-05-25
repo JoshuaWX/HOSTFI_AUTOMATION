@@ -37,7 +37,7 @@ from bot.utils.keyboards import (
 )
 from bot.utils.permissions import get_admin_ids, is_admin, is_admin_channel_chat
 from bot.utils.rate_limiter import check_rate_limit, get_redis
-from config import ADMIN_CHANNEL_ID, MAX_MESSAGES_PER_MINUTE
+from config import ADMIN_CHANNEL_ID, MAX_MESSAGES_PER_MINUTE, is_community_group_chat
 from database.logs import log_action
 from database.users import get_or_create_user, is_user_verified, verify_user
 
@@ -415,6 +415,12 @@ async def group_message_filter(
     if not update.message:
         return
 
+    chat = update.effective_chat
+    if not chat or chat.type not in ("group", "supergroup"):
+        return
+    if not is_community_group_chat(chat.id):
+        return
+
     user = update.effective_user
     if not user:
         return
@@ -423,7 +429,7 @@ async def group_message_filter(
     if await is_admin(user.id, bot=context.bot):
         return
 
-    chat_id = update.effective_chat.id
+    chat_id = chat.id
     text = update.message.text or update.message.caption or ""
 
     # --- Flood control -------------------------------------------------------
