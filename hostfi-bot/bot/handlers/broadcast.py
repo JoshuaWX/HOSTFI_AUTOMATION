@@ -178,7 +178,7 @@ async def rank_command(
                 title("Earn XP"),
                 bullet("50 XP — approved X raids"),
                 bullet("70 XP — Telegram invites after 5h"),
-                bullet("Admin-reviewed XP — HostFi X posts, once daily"),
+                bullet("100 XP — HostFi X posts approved by admins"),
                 bullet("100 XP — approved helpful contributions"),
                 "",
                 "Get your invite link with <code>/invite</code>.",

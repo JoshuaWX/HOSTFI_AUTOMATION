@@ -462,7 +462,7 @@ hostfi-bot/
 | `/poll` | Create a poll |
 | `/cycle start\|finish` | Start or finish campaign cycle |
 | `/raid create [url] [minutes]` | Create approved X raid |
-| `/award helpful [reason]` | Award helpful contribution XP |
+| `/award` | Reply to award helpful contribution XP |
 | `/xp add\|deduct\|disqualify` | Superadmin XP controls |
 | `/tickets` | View active tickets |
 | `/reply` | Reply to ticket user |

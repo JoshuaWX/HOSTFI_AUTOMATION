@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 XP_INVITE = 70
 XP_RAID = 50
-XP_X_POST = 80
+XP_X_POST = 100
 XP_HELPFUL = 100
 
 REWARD_CONFIG = {

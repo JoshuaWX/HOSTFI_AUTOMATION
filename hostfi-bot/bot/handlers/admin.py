@@ -615,7 +615,7 @@ async def adminhelp_command(
                 bullet("<code>/cycle start|finish</code> — Manage cycles"),
                 bullet("<code>/raid create &lt;url&gt; [minutes]</code> — Create raid"),
                 bullet("<code>/invites @username</code> — Invite stats"),
-                bullet("<code>/award helpful [reason]</code> — Award helpful message"),
+                bullet("Reply with <code>/award</code> — Award helpful message"),
                 bullet("Reply: <code>/xp add 100</code> — Add XP to replied user"),
                 bullet("Reply: <code>/xp deduct 50</code> — Deduct XP from replied user"),
                 bullet("<code>/xp add @username AMOUNT</code> — Add XP"),

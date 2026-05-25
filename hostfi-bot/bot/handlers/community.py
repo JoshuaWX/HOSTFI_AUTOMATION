@@ -656,7 +656,7 @@ ADMIN_HELP_TEXT = "\n".join(
         bullet("<code>/stats</code> — View bot stats"),
         bullet("<code>/cycle</code> — Manage campaign cycles"),
         bullet("<code>/raid create</code> — Create a raid"),
-        bullet("<code>/award helpful</code> — Award helpful XP"),
+        bullet("Reply with <code>/award</code> — Award helpful XP"),
         bullet("<code>/invites @username</code> — View invite stats"),
         bullet("Reply shortcut: <code>/xp add 100</code> or <code>/xp deduct 50</code>"),
         bullet("Direct: <code>/xp add|deduct|disqualify</code>"),
