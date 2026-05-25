@@ -19,6 +19,7 @@ from bot.utils.keyboards import (
     campaign_home_keyboard,
     campaign_raid_keyboard,
     campaign_xverify_keyboard,
+    xpost_review_keyboard,
 )
 from bot.utils.permissions import is_admin, is_admin_channel_chat, is_superadmin
 from bot.utils.rate_limiter import check_rate_limit
@@ -28,10 +29,10 @@ from bot.utils.x_api import (
     is_meaningful_x_text,
     is_reply_or_quote_to,
     is_x_api_configured,
-    mentions_hostfi,
     parse_x_post_url,
 )
 from config import (
+    ADMIN_CHANNEL_ID,
     COMMUNITY_GROUP_IDS,
     INVITE_RETENTION_HOURS,
     get_invite_target_group_id,
@@ -40,11 +41,11 @@ from database.campaign import (
     XP_HELPFUL,
     XP_INVITE,
     XP_RAID,
-    XP_X_POST,
     award_xp,
     close_raid,
     create_raid,
     create_x_verification,
+    delete_x_post_submission,
     finish_cycle,
     get_active_cycle,
     get_active_raids,
@@ -56,10 +57,12 @@ from database.campaign import (
     get_pending_invite_joins,
     get_raid,
     get_raid_messages,
+    get_x_post_submission,
     get_x_account,
     has_daily_x_post,
     has_raid_submission,
     is_disqualified,
+    mark_x_post_submission_reviewed,
     mark_invite_join,
     record_invite_join,
     record_raid_message,
@@ -69,7 +72,7 @@ from database.campaign import (
     verify_x_account,
 )
 from database.logs import log_action
-from database.users import get_or_create_user, get_user_by_username
+from database.users import get_or_create_user, get_user, get_user_by_username
 
 logger = logging.getLogger(__name__)
 
@@ -95,6 +98,12 @@ def _display_user(row: dict) -> str:
     """Return a safe display name for leaderboard rows."""
     name = row.get("first_name") or row.get("username") or str(row.get("telegram_id"))
     return html.escape(str(name))
+
+
+def _profile_link(telegram_id: int, username: str | None = None, first_name: str | None = None) -> str:
+    """Return a clickable Telegram profile link."""
+    label = f"@{username}" if username else (first_name or str(telegram_id))
+    return f'<a href="tg://user?id={telegram_id}">{html.escape(str(label))}</a>'
 
 
 def _campaign_missing() -> str:
@@ -158,7 +167,7 @@ def _campaign_home_text(cycle: dict) -> str:
         + "\n"
         + bullet(f"Helpful contributions — <b>{XP_HELPFUL} XP</b>")
         + "\n"
-        + bullet(f"HostFi X posts — <b>{XP_X_POST} XP</b> once daily")
+        + bullet("HostFi X posts — admin-reviewed, once daily")
         + "\n\nUse the buttons below to manage your campaign activity."
     )
 
@@ -308,6 +317,13 @@ async def _verify_x_post_url(update: Update, context: ContextTypes.DEFAULT_TYPE,
         return False
 
     account = await get_x_account(user_id)
+    if account and account.get("status") == "verified":
+        await update.effective_message.reply_text(
+            status_text("info", "Your X account is already linked."),
+            parse_mode="HTML",
+            reply_markup=campaign_home_keyboard(),
+        )
+        return True
     if not account or account.get("status") != "pending":
         await update.effective_message.reply_text(
             status_text("warning", "Start by linking your X handle first."),
@@ -320,6 +336,13 @@ async def _verify_x_post_url(update: Update, context: ContextTypes.DEFAULT_TYPE,
         await update.effective_message.reply_text(
             status_text("error", "Send a valid X verification post URL."),
             reply_markup=campaign_cancel_keyboard(),
+        )
+        return False
+
+    if not await check_rate_limit(user_id, "xverify", 3, 86400):
+        await update.effective_message.reply_text(
+            status_text("warning", "You have reached the daily X verification limit. Try again tomorrow."),
+            parse_mode="HTML",
         )
         return False
 
@@ -459,13 +482,69 @@ async def _submit_raid_proof_url(
     return True
 
 
+def _xpost_review_text(
+    submission: dict,
+    *,
+    user_link: str,
+    linked_handle: str,
+    url_handle: str,
+    url_handle_matches: bool,
+    status: str = "Pending",
+    reviewed_by: str | None = None,
+    xp_awarded: int | None = None,
+) -> str:
+    """Build the admin review card for a personal X post submission."""
+    lines = [
+        title("X Post Review", "📝"),
+        "",
+        field("Submission", f"<b>#{submission.get('id')}</b>"),
+        field("Status", f"<b>{html.escape(status)}</b>"),
+        field("User", user_link),
+        field("Telegram ID", f"<code>{submission.get('telegram_id')}</code>"),
+        field("Linked X", f"<b>@{html.escape(linked_handle)}</b>"),
+        field("URL Handle", f"<b>@{html.escape(url_handle)}</b>"),
+        field("URL Match", "<b>Yes</b>" if url_handle_matches else "<b>No</b>"),
+        field("Cycle", f"<b>#{submission.get('cycle_number', submission.get('cycle_id'))}</b>"),
+        field("Date", f"<b>{html.escape(str(submission.get('submission_date') or ''))}</b>"),
+        "",
+        html.escape(str(submission.get("proof_url") or "")),
+        "",
+        "<i>Admin must manually verify post author, quality, and HostFi relevance.</i>",
+    ]
+    if reviewed_by:
+        lines.insert(4, field("Reviewed by", reviewed_by))
+    if xp_awarded is not None:
+        lines.insert(5, field("XP awarded", f"<b>{xp_awarded:,}</b>"))
+    return "\n".join(lines)
+
+
+async def _xpost_review_context(submission: dict) -> tuple[str, str, str, bool]:
+    """Return display values needed to render an X post review card."""
+    metadata = submission.get("metadata") or {}
+    linked_handle = str(metadata.get("linked_x_username") or "").lower().lstrip("@")
+    url_handle = str(metadata.get("submitted_url_username") or "").lower().lstrip("@")
+    url_handle_matches = bool(metadata.get("url_handle_matches"))
+    user_row = None
+    try:
+        user_row = await get_user(int(submission["telegram_id"]))
+    except Exception:
+        user_row = None
+    user_link = _profile_link(
+        int(submission["telegram_id"]),
+        username=user_row.get("username") if user_row else None,
+        first_name=user_row.get("first_name") if user_row else None,
+    )
+    return user_link, linked_handle, url_handle, url_handle_matches
+
+
 async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, url: str) -> bool:
-    """Submit a personal HostFi-related X post for automatic XP."""
+    """Submit a personal HostFi-related X post for admin review without X API calls."""
     user_id = await _ensure_user(update)
     if not user_id or not update.effective_message:
         return False
-    if not is_x_api_configured():
-        await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
+
+    if not ADMIN_CHANNEL_ID:
+        await update.effective_message.reply_text(status_text("error", "Admin review channel is not configured."))
         return False
 
     cycle = await get_active_cycle()
@@ -495,56 +574,64 @@ async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, 
 
     day = _utc_now().date().isoformat()
     if await has_daily_x_post(user_id, cycle["id"], day):
-        await update.effective_message.reply_text(status_text("warning", "You already earned personal X post XP today."))
+        await update.effective_message.reply_text(
+            status_text("warning", "You already have a pending or approved X post submission today.")
+        )
         return False
 
-    try:
-        post = await fetch_post(parsed[1], url)
-    except Exception as exc:
-        logger.error("X post fetch failed: %s", exc)
-        await update.effective_message.reply_text(status_text("error", "Could not verify that X post."))
-        return False
-
-    if post.author_id != str(account.get("x_user_id")):
-        await update.effective_message.reply_text(status_text("error", "Post must come from your linked X account."))
-        return False
-    if not mentions_hostfi(post.text) or not is_meaningful_x_text(post.text):
-        await update.effective_message.reply_text(status_text("error", "Post must be meaningful and clearly about HostFi."))
-        return False
-    if post.created_at:
-        cycle_start = _parse_iso(cycle.get("start_at"))
-        if cycle_start and post.created_at < cycle_start:
-            await update.effective_message.reply_text(status_text("error", "This post was made before the current campaign cycle."))
-            return False
-
+    linked_handle = str(account.get("username") or "").lower().lstrip("@")
+    url_handle = parsed[0].lower().lstrip("@")
+    url_handle_matches = bool(linked_handle and linked_handle == url_handle)
     submission = await record_x_post_submission(
         cycle["id"],
         user_id,
-        post.post_id,
+        parsed[1],
         url,
         day,
-        "approved",
-        {"text": post.text[:500]},
+        "pending",
+        {
+            "linked_x_username": linked_handle,
+            "submitted_url_username": url_handle,
+            "url_handle_matches": url_handle_matches,
+            "requires_manual_review": True,
+        },
     )
     if not submission:
-        await update.effective_message.reply_text(status_text("error", "Could not record this X post."))
+        await update.effective_message.reply_text(
+            status_text("error", "Could not record this X post. It may already have been submitted.")
+        )
         return False
 
-    event = await award_xp(
-        user_id,
-        XP_X_POST,
-        "x_post",
-        "Approved personal HostFi X post",
-        evidence_url=url,
-        external_id=post.post_id,
-        metadata={"day": day},
-    )
-    if not event:
-        await update.effective_message.reply_text(status_text("error", "Could not award XP."))
+    user = update.effective_user
+    user_link = _profile_link(user_id, user.username if user else None, user.first_name if user else None)
+    review_submission = {
+        **submission,
+        "cycle_number": cycle.get("cycle_number"),
+    }
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_CHANNEL_ID,
+            text=_xpost_review_text(
+                review_submission,
+                user_link=user_link,
+                linked_handle=linked_handle,
+                url_handle=url_handle,
+                url_handle_matches=url_handle_matches,
+            ),
+            parse_mode="HTML",
+            reply_markup=xpost_review_keyboard(submission["id"], url),
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception as exc:
+        logger.error("Failed to send X post review alert: %s", exc)
+        await delete_x_post_submission(int(submission["id"]))
+        await update.effective_message.reply_text(
+            status_text("error", "Could not send this to admins for review. Please try again later.")
+        )
         return False
 
     await update.effective_message.reply_text(
-        title("X Post Approved", "✅") + f"\n\n{field('XP earned', f'<b>{XP_X_POST}</b>')}",
+        title("X Post Submitted", "✅") + "\n\nYour post was sent to admins for review.",
         parse_mode="HTML",
         reply_markup=campaign_home_keyboard(),
     )
@@ -927,11 +1014,15 @@ async def _raid_submit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def xpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Submit a personal HostFi-related X post for automatic XP."""
+    """Submit a personal HostFi-related X post for admin review."""
     if not update.effective_message:
         return
     if not context.args:
-        await update.effective_message.reply_text("Usage: <code>/xpost YOUR_X_POST_URL</code>", parse_mode="HTML")
+        await update.effective_message.reply_text(
+            "Usage: <code>/xpost YOUR_X_POST_URL</code>\n\n"
+            "Your post will be sent to admins for review.",
+            parse_mode="HTML",
+        )
         return
     await _submit_xpost_url(update, context, context.args[0])
 
@@ -1157,6 +1248,197 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 # ---------------------------------------------------------------------------
 
 
+async def xpost_review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin approve/reject buttons for personal X post submissions."""
+    query = update.callback_query
+    if not query or not query.data or not query.message:
+        return
+
+    if not await is_admin(query.from_user.id, bot=context.bot):
+        await query.answer("Admins only.", show_alert=True)
+        return
+    if not is_admin_channel_chat(query.message.chat_id):
+        await query.answer("Use this in the admin channel.", show_alert=True)
+        return
+
+    try:
+        _, action, raw_id = query.data.split("_", 2)
+        submission_id = int(raw_id)
+    except ValueError:
+        await query.answer("Invalid review action.", show_alert=True)
+        return
+
+    submission = await get_x_post_submission(submission_id)
+    if not submission:
+        await query.answer("Submission not found.", show_alert=True)
+        return
+    if submission.get("status") != "pending":
+        await query.answer("This submission has already been reviewed.", show_alert=True)
+        return
+
+    if action == "approve":
+        _set_pending(
+            context,
+            {
+                "type": "xpost_award_xp",
+                "submission_id": submission_id,
+                "chat_id": query.message.chat_id,
+                "review_message_id": query.message.message_id,
+            },
+        )
+        await query.answer("Send the XP amount.")
+        await query.message.reply_text(
+            title("Approve X Post", "✅")
+            + f"\n\nHow many XP should submission <b>#{submission_id}</b> receive?",
+            parse_mode="HTML",
+        )
+        return
+
+    if action == "reject":
+        reviewed = await mark_x_post_submission_reviewed(
+            submission_id,
+            "rejected",
+            query.from_user.id,
+        )
+        if not reviewed:
+            await query.answer("Could not reject submission.", show_alert=True)
+            return
+
+        user_link, linked_handle, url_handle, url_handle_matches = await _xpost_review_context(reviewed)
+        reviewer = _profile_link(query.from_user.id, query.from_user.username, query.from_user.first_name)
+        await query.edit_message_text(
+            _xpost_review_text(
+                reviewed,
+                user_link=user_link,
+                linked_handle=linked_handle,
+                url_handle=url_handle,
+                url_handle_matches=url_handle_matches,
+                status="Rejected",
+                reviewed_by=reviewer,
+            ),
+            parse_mode="HTML",
+            reply_markup=None,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+        await query.answer("Submission rejected.")
+        try:
+            await context.bot.send_message(
+                int(reviewed["telegram_id"]),
+                title("X Post Not Approved", "⚠️")
+                + "\n\nYour submitted X post was reviewed and not approved.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        await log_action(
+            "xpost_rejected",
+            query.from_user.id,
+            target_telegram_id=int(reviewed["telegram_id"]),
+            metadata={"submission_id": submission_id},
+        )
+        return
+
+    await query.answer("Unknown review action.", show_alert=True)
+
+
+async def _handle_xpost_award_amount(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    pending: dict,
+    text: str,
+) -> bool:
+    """Award admin-selected XP for a pending X post review."""
+    if not update.effective_user or not update.effective_message:
+        return False
+    if not await is_admin(update.effective_user.id, bot=context.bot):
+        await update.effective_message.reply_text(status_text("error", "Admins only."))
+        return False
+
+    try:
+        amount = int(text)
+    except ValueError:
+        await update.effective_message.reply_text(status_text("error", "Send a positive XP amount."))
+        return False
+    if amount <= 0:
+        await update.effective_message.reply_text(status_text("error", "XP amount must be positive."))
+        return False
+
+    submission_id = int(pending["submission_id"])
+    submission = await get_x_post_submission(submission_id)
+    if not submission or submission.get("status") != "pending":
+        await update.effective_message.reply_text(status_text("warning", "This X post submission is no longer pending."))
+        return True
+
+    event = await award_xp(
+        int(submission["telegram_id"]),
+        amount,
+        "x_post",
+        "Admin-approved personal HostFi X post",
+        evidence_url=submission.get("proof_url"),
+        external_id=submission.get("x_post_id"),
+        metadata={"submission_id": submission_id, "submission_date": submission.get("submission_date")},
+        actor_telegram_id=update.effective_user.id,
+        cycle_id=submission["cycle_id"],
+    )
+    if not event:
+        await update.effective_message.reply_text(status_text("error", "Could not award XP for this submission."))
+        return False
+
+    reviewed = await mark_x_post_submission_reviewed(
+        submission_id,
+        "approved",
+        update.effective_user.id,
+        xp_awarded=amount,
+    )
+    if not reviewed:
+        await update.effective_message.reply_text(status_text("error", "XP was awarded, but review status could not be saved."))
+        return True
+
+    user_link, linked_handle, url_handle, url_handle_matches = await _xpost_review_context(reviewed)
+    reviewer = _profile_link(update.effective_user.id, update.effective_user.username, update.effective_user.first_name)
+    try:
+        await context.bot.edit_message_text(
+            chat_id=int(pending["chat_id"]),
+            message_id=int(pending["review_message_id"]),
+            text=_xpost_review_text(
+                reviewed,
+                user_link=user_link,
+                linked_handle=linked_handle,
+                url_handle=url_handle,
+                url_handle_matches=url_handle_matches,
+                status="Approved",
+                reviewed_by=reviewer,
+                xp_awarded=amount,
+            ),
+            parse_mode="HTML",
+            reply_markup=None,
+            link_preview_options=LinkPreviewOptions(is_disabled=True),
+        )
+    except Exception as exc:
+        logger.warning("Could not update X post review card %s: %s", submission_id, exc)
+
+    await update.effective_message.reply_text(
+        status_text("success", f"Approved submission #{submission_id} for {amount:,} XP."),
+        parse_mode="HTML",
+    )
+    try:
+        await context.bot.send_message(
+            int(reviewed["telegram_id"]),
+            title("X Post Approved", "✅")
+            + f"\n\n{field('XP earned', f'<b>{amount:,}</b>')}",
+            parse_mode="HTML",
+        )
+    except Exception:
+        pass
+    await log_action(
+        "xpost_approved",
+        update.effective_user.id,
+        target_telegram_id=int(reviewed["telegram_id"]),
+        metadata={"submission_id": submission_id, "amount": amount},
+    )
+    return True
+
+
 async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle campaign inline button actions."""
     query = update.callback_query
@@ -1219,7 +1501,7 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
     if data == "campaign_xpost_start":
         _set_pending(context, {"type": "xpost", "chat_id": query.message.chat_id})
         reply = await query.message.reply_text(
-            "Send your HostFi-related X post URL.",
+            "Send your HostFi-related X post URL. Admins will review it before XP is awarded.",
             reply_markup=campaign_cancel_keyboard(),
         )
         await schedule_delete(reply, context, 60)
@@ -1286,6 +1568,8 @@ async def campaign_guided_input_handler(update: Update, context: ContextTypes.DE
         success = await _verify_x_post_url(update, context, text)
     elif action_type == "xpost":
         success = await _submit_xpost_url(update, context, text)
+    elif action_type == "xpost_award_xp":
+        success = await _handle_xpost_award_amount(update, context, pending, text)
     elif action_type == "raid_proof":
         success = await _submit_raid_proof_url(update, context, int(pending.get("raid_id")), text)
     else:

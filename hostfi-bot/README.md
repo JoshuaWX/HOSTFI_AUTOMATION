@@ -73,7 +73,7 @@ Edit `.env` with your actual credentials. **Detailed instructions for each varia
 | `COMMUNITY_GROUP_ID` | **Yes** | One or more community group IDs, comma-separated | See **Getting Telegram IDs** |
 | `GEMINI_API_KEY` | **Yes** | Gemini API key | See **Gemini Setup** |
 | `GEMINI_MODEL` | No | Gemini model, defaults to `gemini-2.5-flash` | `.env.example` |
-| `X_BEARER_TOKEN` | For XP campaign X features | Official X API bearer token | X Developer Portal |
+| `X_BEARER_TOKEN` | For X linking and raid proof verification | Official X API bearer token | X Developer Portal |
 | `X_API_BASE_URL` | No | X API base URL, defaults to `https://api.x.com/2` | `.env.example` |
 | `SUPABASE_URL` | **Yes** | Supabase project URL | See **Supabase Setup** |
 | `SUPABASE_SERVICE_ROLE_KEY` | **Yes** | Supabase service role key for this backend bot | See **Supabase Setup** |
@@ -209,7 +209,7 @@ When users type `/` in the chat, Telegram shows a command menu. **Only register 
    xlink - Link your X account
    xverify - Verify your X account
    raids - Active HostFi raids
-   xpost - Submit a HostFi X post
+   xpost - Submit a HostFi X post for admin review
    rank - Your XP and rank
    leaderboard - Top 10 members
    ```
@@ -334,7 +334,7 @@ git push -u origin main
    ADMIN_IDS=                    (leave empty — group admins are auto-detected)
    UPSTASH_REDIS_URL=            (leave empty if you don't have Redis yet)
    UPSTASH_REDIS_TOKEN=          (leave empty if you don't have Redis yet)
-   X_BEARER_TOKEN=               (required only for X account linking, raids, and /xpost)
+   X_BEARER_TOKEN=               (required only for X account linking and raids)
    X_API_BASE_URL=https://api.x.com/2
    ```
 5. Go to **Settings → Networking → Public Networking** and click **Generate Domain**
@@ -443,7 +443,7 @@ hostfi-bot/
 | `/xverify [url]` | Verify your X account |
 | `/raids` | View active X raids |
 | `/raid submit [id] [url]` | Submit raid proof |
-| `/xpost [url]` | Submit a HostFi X post for XP |
+| `/xpost [url]` | Submit a HostFi X post for admin review |
 | `/rank` | Your XP rank |
 | `/leaderboard` | Top 10 members |
 

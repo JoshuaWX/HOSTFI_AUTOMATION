@@ -115,6 +115,25 @@ def campaign_raid_keyboard(raid_id: int, target_url: str) -> InlineKeyboardMarku
     )
 
 
+def xpost_review_keyboard(submission_id: int, post_url: str) -> InlineKeyboardMarkup:
+    """Build admin review buttons for a personal X post submission."""
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Open Post", url=post_url)],
+            [
+                InlineKeyboardButton(
+                    "Approve",
+                    callback_data=f"xpost_approve_{submission_id}",
+                ),
+                InlineKeyboardButton(
+                    "Reject",
+                    callback_data=f"xpost_reject_{submission_id}",
+                ),
+            ],
+        ]
+    )
+
+
 # ---------------------------------------------------------------------------
 # Verification CAPTCHA
 # ---------------------------------------------------------------------------

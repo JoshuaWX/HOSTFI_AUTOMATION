@@ -286,7 +286,11 @@ def _register_callback_handlers(app: Application) -> None:
     """Register all inline keyboard callback handlers."""
 
     from bot.handlers.broadcast import broadcast_confirm_callback
-    from bot.handlers.campaign import campaign_callback_handler, raid_submit_info_callback
+    from bot.handlers.campaign import (
+        campaign_callback_handler,
+        raid_submit_info_callback,
+        xpost_review_callback,
+    )
     from bot.handlers.community import (
         help_callback,
         rules_callback,
@@ -317,6 +321,10 @@ def _register_callback_handlers(app: Application) -> None:
 
     app.add_handler(
         CallbackQueryHandler(campaign_callback_handler, pattern=r"^campaign_")
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(xpost_review_callback, pattern=r"^xpost_(approve|reject)_")
     )
 
     app.add_handler(

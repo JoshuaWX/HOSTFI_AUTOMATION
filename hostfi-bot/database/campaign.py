@@ -945,7 +945,7 @@ async def record_raid_submission(
 
 
 async def has_daily_x_post(telegram_id: int, cycle_id: int, day: str) -> bool:
-    """Return True if user already earned personal X post XP for the day."""
+    """Return True if user already has a pending/approved personal X post that day."""
 
     def _op() -> bool:
         client = get_supabase_client()
@@ -955,7 +955,7 @@ async def has_daily_x_post(telegram_id: int, cycle_id: int, day: str) -> bool:
             .eq("cycle_id", cycle_id)
             .eq("telegram_id", telegram_id)
             .eq("submission_date", day)
-            .eq("status", "approved")
+            .in_("status", ["pending", "approved"])
             .limit(1)
             .execute()
         )
@@ -992,6 +992,7 @@ async def record_x_post_submission(
                     "submission_date": day,
                     "status": status,
                     "awarded_at": _iso(_now()) if status == "approved" else None,
+                    "xp_awarded": 0,
                     "metadata": metadata or {},
                 }
             )
@@ -1004,3 +1005,74 @@ async def record_x_post_submission(
     except Exception as exc:
         logger.error("Failed to record X post submission: %s", exc)
         return None
+
+
+async def get_x_post_submission(submission_id: int) -> dict | None:
+    """Return a personal X post submission by id."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        result = (
+            client.table("x_post_submissions")
+            .select("*")
+            .eq("id", submission_id)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to get X post submission %s: %s", submission_id, exc)
+        return None
+
+
+async def mark_x_post_submission_reviewed(
+    submission_id: int,
+    status: str,
+    reviewed_by: int,
+    *,
+    xp_awarded: int = 0,
+) -> dict | None:
+    """Mark a personal X post submission as approved or rejected by an admin."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        now = _now()
+        payload: dict[str, Any] = {
+            "status": status,
+            "reviewed_by": reviewed_by,
+            "reviewed_at": _iso(now),
+            "xp_awarded": xp_awarded,
+        }
+        if status == "approved":
+            payload["awarded_at"] = _iso(now)
+        result = (
+            client.table("x_post_submissions")
+            .update(payload)
+            .eq("id", submission_id)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to review X post submission %s: %s", submission_id, exc)
+        return None
+
+
+async def delete_x_post_submission(submission_id: int) -> None:
+    """Delete an unreviewed X post submission after a local delivery failure."""
+
+    def _op() -> None:
+        client = get_supabase_client()
+        client.table("x_post_submissions").delete().eq("id", submission_id).eq(
+            "status", "pending"
+        ).execute()
+
+    try:
+        await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to delete X post submission %s: %s", submission_id, exc)

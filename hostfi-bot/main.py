@@ -123,7 +123,7 @@ async def lifespan(app: FastAPI):
         BotCommand("xlink", "Link your X account"),
         BotCommand("xverify", "Verify your X account"),
         BotCommand("raids", "View active raids"),
-        BotCommand("xpost", "Submit a HostFi X post"),
+        BotCommand("xpost", "Submit X post for review"),
         BotCommand("rank", "View your XP rank"),
         BotCommand("leaderboard", "Community leaderboard"),
     ]

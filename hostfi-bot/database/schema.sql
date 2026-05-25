@@ -248,9 +248,12 @@ CREATE TABLE IF NOT EXISTS x_post_submissions (
     x_post_id            TEXT UNIQUE NOT NULL,
     proof_url            TEXT NOT NULL,
     submission_date      DATE NOT NULL,
-    status               TEXT DEFAULT 'approved'
+    status               TEXT DEFAULT 'pending'
                             CHECK (status IN ('approved', 'rejected', 'pending')),
     awarded_at           TIMESTAMPTZ,
+    reviewed_by          BIGINT,
+    reviewed_at          TIMESTAMPTZ,
+    xp_awarded           INTEGER DEFAULT 0,
     metadata             JSONB DEFAULT '{}'::jsonb,
     created_at           TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE (cycle_id, telegram_id, submission_date)
