@@ -135,6 +135,34 @@ def _target_community_group_id(update: Update) -> int:
     return get_invite_target_group_id()
 
 
+def _safe_url_preview(url: str | None) -> str | None:
+    """Return a short URL preview for logs without dumping full user content."""
+    if not url:
+        return None
+    return url[:96]
+
+
+def _log_raid_proof_rejection(
+    reason: str,
+    telegram_id: int | None,
+    raid_id: int | str | None,
+    *,
+    proof_post_id: str | None = None,
+    proof_url: str | None = None,
+    level: int = logging.INFO,
+) -> None:
+    """Log a safe, structured raid-proof rejection record."""
+    logger.log(
+        level,
+        "Raid proof rejected reason=%s telegram_id=%s raid_id=%s proof_post_id=%s proof_url=%s",
+        reason,
+        telegram_id,
+        raid_id,
+        proof_post_id,
+        _safe_url_preview(proof_url),
+    )
+
+
 async def _send_to_community_groups(bot, **kwargs) -> int:
     """Send one message to every configured community group."""
     sent = 0
@@ -462,36 +490,44 @@ async def _submit_raid_proof_url(
     """Submit a raid proof URL and auto-award XP if strict checks pass."""
     user_id = await _ensure_user(update)
     if not user_id or not update.effective_message:
+        _log_raid_proof_rejection("missing_user_or_message", user_id, raid_id, proof_url=proof_url, level=logging.WARNING)
         return False
     if not is_x_api_configured():
+        _log_raid_proof_rejection("x_api_not_configured", user_id, raid_id, proof_url=proof_url, level=logging.WARNING)
         await update.effective_message.reply_text(_x_missing(), parse_mode="HTML")
         return False
 
     raid = await get_raid(raid_id)
     if not raid or raid.get("status") != "active":
+        _log_raid_proof_rejection("raid_inactive_or_missing", user_id, raid_id, proof_url=proof_url)
         await update.effective_message.reply_text(status_text("error", "Raid not found or no longer active."))
         return False
 
     cycle = await get_active_cycle()
     if not cycle or int(cycle["id"]) != int(raid["cycle_id"]):
+        _log_raid_proof_rejection("cycle_mismatch", user_id, raid_id, proof_url=proof_url)
         await update.effective_message.reply_text(status_text("error", "This raid belongs to a finished campaign cycle."))
         return False
     if await is_disqualified(user_id, int(raid["cycle_id"])):
+        _log_raid_proof_rejection("user_disqualified", user_id, raid_id, proof_url=proof_url)
         await update.effective_message.reply_text(status_text("warning", "You are disqualified from the current campaign cycle."))
         return False
 
     deadline = _parse_iso(raid.get("deadline_at"))
     if deadline and _utc_now() > deadline:
+        _log_raid_proof_rejection("raid_expired", user_id, raid_id, proof_url=proof_url)
         await update.effective_message.reply_text(status_text("warning", "This raid has expired."))
         return False
     if await has_raid_submission(raid_id, user_id):
+        _log_raid_proof_rejection("duplicate_submission", user_id, raid_id, proof_url=proof_url)
         await update.effective_message.reply_text(status_text("warning", "You already submitted proof for this raid."))
         return False
 
     account = await get_x_account(user_id)
     if not account or account.get("status") != "verified":
+        _log_raid_proof_rejection("x_account_not_linked", user_id, raid_id, proof_url=proof_url)
         await update.effective_message.reply_text(
-            status_text("warning", "Link your X account first."),
+            status_text("warning", "Link your X account first, then submit raid proof again."),
             parse_mode="HTML",
             reply_markup=campaign_home_keyboard(),
         )
@@ -499,6 +535,7 @@ async def _submit_raid_proof_url(
 
     parsed = parse_x_post_url(proof_url)
     if not parsed:
+        _log_raid_proof_rejection("invalid_proof_url", user_id, raid_id, proof_url=proof_url)
         await update.effective_message.reply_text(
             status_text("error", "Send a valid X proof URL."),
             reply_markup=campaign_cancel_keyboard(),
@@ -508,17 +545,21 @@ async def _submit_raid_proof_url(
     try:
         post = await fetch_post(parsed[1], proof_url)
     except Exception as exc:
-        logger.error("Raid proof fetch failed: %s", exc)
-        await update.effective_message.reply_text(status_text("error", "Could not verify that X proof."))
+        _log_raid_proof_rejection("x_fetch_failed", user_id, raid_id, proof_post_id=parsed[1], proof_url=proof_url, level=logging.WARNING)
+        logger.warning("Raid proof fetch failed telegram_id=%s raid_id=%s post_id=%s error=%s", user_id, raid_id, parsed[1], exc)
+        await update.effective_message.reply_text(status_text("error", "Could not verify that X proof. Try again later."))
         return False
 
     if post.author_id != str(account.get("x_user_id")):
+        _log_raid_proof_rejection("wrong_x_author", user_id, raid_id, proof_post_id=post.post_id, proof_url=proof_url)
         await update.effective_message.reply_text(status_text("error", "Proof must come from your linked X account."))
         return False
     if not is_reply_or_quote_to(post, str(raid["target_post_id"]), str(raid["target_url"])):
+        _log_raid_proof_rejection("not_reply_or_quote", user_id, raid_id, proof_post_id=post.post_id, proof_url=proof_url)
         await update.effective_message.reply_text(status_text("error", "Proof must reply to or quote the approved raid post."))
         return False
     if not is_meaningful_x_text(post.text):
+        _log_raid_proof_rejection("low_effort_text", user_id, raid_id, proof_post_id=post.post_id, proof_url=proof_url)
         await update.effective_message.reply_text(status_text("error", "Low-effort raid text does not qualify for XP."))
         return False
 
@@ -532,6 +573,7 @@ async def _submit_raid_proof_url(
         {"text": post.text[:500]},
     )
     if not submission:
+        _log_raid_proof_rejection("record_submission_failed", user_id, raid_id, proof_post_id=post.post_id, proof_url=proof_url, level=logging.WARNING)
         await update.effective_message.reply_text(status_text("error", "Could not record your raid proof."))
         return False
 
@@ -546,6 +588,7 @@ async def _submit_raid_proof_url(
         cycle_id=raid["cycle_id"],
     )
     if not event:
+        _log_raid_proof_rejection("award_xp_failed", user_id, raid_id, proof_post_id=post.post_id, proof_url=proof_url, level=logging.WARNING)
         await update.effective_message.reply_text(status_text("error", "Could not award XP. Check that the campaign is active."))
         return False
 
@@ -1009,7 +1052,7 @@ async def raid_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not context.args:
         await update.effective_message.reply_text(
             "Usage:\n<code>/raid create X_POST_URL [deadline_minutes]</code>\n"
-            "<code>/raid submit RAID_ID YOUR_X_PROOF_URL</code>",
+            "Use <code>/raid submit RAID_ID YOUR_X_PROOF_URL</code> in DM.",
             parse_mode="HTML",
         )
         return
@@ -1022,7 +1065,7 @@ async def raid_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             await _send_dm_or_group_notice(
                 update,
                 context,
-                "Submit raid proof privately with:\n<code>/raid submit RAID_ID YOUR_X_PROOF_URL</code>",
+                "Submit raid proof in DM with:\n<code>/raid submit RAID_ID YOUR_X_PROOF_URL</code>",
             )
             return
         await _raid_submit(update, context)
@@ -1107,7 +1150,7 @@ async def _raid_submit(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     """Submit a raid proof URL and auto-award XP if strict checks pass."""
     if len(context.args) < 3:
         await update.effective_message.reply_text(
-            "Usage: <code>/raid submit RAID_ID YOUR_X_PROOF_URL</code>", parse_mode="HTML"
+            "Usage in DM: <code>/raid submit RAID_ID YOUR_X_PROOF_URL</code>", parse_mode="HTML"
         )
         return
 
@@ -1805,8 +1848,8 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
             f"To earn raid XP:\n"
             f"1. Open the approved X post.\n"
             f"2. Reply or quote it from your linked X account.\n"
-            f"3. Tap <b>Submit Proof</b> and send your proof URL.\n\n"
-            f"Fallback command:\n<code>/raid submit {raid_id} YOUR_X_PROOF_URL</code>",
+            f"3. Tap <b>Submit Proof</b>, then send your proof URL in DM.\n\n"
+            f"Fallback command in DM:\n<code>/raid submit {raid_id} YOUR_X_PROOF_URL</code>",
             parse_mode="HTML",
         )
         await schedule_delete(reply, context, 60)
@@ -1820,7 +1863,7 @@ async def raid_submit_info_callback(update: Update, context: ContextTypes.DEFAUL
     await query.answer()
     raid_id = query.data.rsplit("_", 1)[-1]
     await query.message.reply_text(
-        f"Submit proof with:\n<code>/raid submit {html.escape(raid_id)} YOUR_X_PROOF_URL</code>",
+        f"Submit proof in DM with:\n<code>/raid submit {html.escape(raid_id)} YOUR_X_PROOF_URL</code>",
         parse_mode="HTML",
     )
 
@@ -1832,11 +1875,42 @@ async def campaign_guided_input_handler(update: Update, context: ContextTypes.DE
         return
     if not update.effective_message or not update.effective_message.text:
         return
-    if pending.get("chat_id") and update.effective_chat and update.effective_chat.id != pending["chat_id"]:
-        return
 
     text = update.effective_message.text.strip()
     action_type = pending.get("type")
+    expected_chat_id = pending.get("chat_id")
+    source_chat = update.effective_chat
+    if expected_chat_id and source_chat and source_chat.id != expected_chat_id:
+        if (
+            action_type in {"raid_proof", "xpost", "xverify", "xlink_handle"}
+            and source_chat.type in ("group", "supergroup")
+            and is_community_group_chat(source_chat.id)
+        ):
+            user_id = update.effective_user.id if update.effective_user else None
+            logger.info(
+                "Campaign pending input sent in wrong chat action=%s telegram_id=%s source_chat_id=%s expected_chat_id=%s",
+                action_type,
+                user_id,
+                source_chat.id,
+                expected_chat_id,
+            )
+            notice = await update.effective_message.reply_text(
+                "This step happens in DM. Check your private chat with the bot."
+            )
+            await schedule_any_delete(notice, context, 30)
+            try:
+                await update.effective_message.delete()
+            except Exception as exc:
+                logger.warning(
+                    "Could not delete wrong-chat campaign input action=%s telegram_id=%s chat_id=%s: %s",
+                    action_type,
+                    user_id,
+                    source_chat.id,
+                    exc,
+                )
+            raise ApplicationHandlerStop
+        return
+
     success = False
 
     if action_type == "xlink_handle":
