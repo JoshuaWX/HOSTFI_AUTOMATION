@@ -658,6 +658,28 @@ def _leaderboard_preview_lines(rows: list[dict], *, limit: int = 5) -> list[str]
     return lines
 
 
+def _cycle_window_lines(cycle: dict) -> list[str]:
+    """Build compact start/end fields for a campaign cycle."""
+    def _parse(value: str | None) -> datetime | None:
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value.replace("Z", "+00:00")).astimezone(timezone.utc)
+        except ValueError:
+            return None
+
+    start_at = _parse(cycle.get("start_at"))
+    end_at = _parse(cycle.get("end_at"))
+    start_label = start_at.strftime("%Y-%m-%d %H:%M UTC") if start_at else "Now"
+    end_label = end_at.strftime("%Y-%m-%d %H:%M UTC") if end_at else "Manual finish"
+    duration_label = "14 days" if start_at and end_at and (end_at - start_at).days == 14 else "Until finished"
+    return [
+        field("Started", f"<b>{start_label}</b>"),
+        field("Scheduled end", f"<b>{end_label}</b>"),
+        field("Default length", f"<b>{duration_label}</b>"),
+    ]
+
+
 async def _run_reindex_from_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Run the knowledge base reindex flow from a dashboard callback."""
     status_msg = await update.effective_message.reply_text(
@@ -935,7 +957,9 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
         await query.message.reply_text(
             title("Campaign Cycle Started", "✅")
             + "\n\n"
-            + field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>"),
+            + field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>")
+            + "\n"
+            + "\n".join(_cycle_window_lines(cycle)),
             parse_mode="HTML",
             reply_markup=admin_campaign_keyboard(superadmin),
         )
@@ -957,7 +981,8 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             title("Projected Winners"),
             *_leaderboard_preview_lines(winners),
             "",
-            "Confirming will finalize winners, reset visible XP, close current raids, and start the next cycle.",
+            "Confirming will finalize winners, reset visible XP, and close current raids.",
+            "No new cycle will open until you start one manually.",
         ]
         await query.message.reply_text(
             "\n".join(lines),
@@ -979,9 +1004,7 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
             "",
             *_leaderboard_preview_lines(winners),
         ]
-        new_cycle = result.get("new_cycle")
-        if new_cycle:
-            lines.extend(["", f"New cycle started: <b>#{new_cycle.get('cycle_number')}</b>"])
+        lines.extend(["", "No new cycle was opened. Run <code>/cycle start</code> when ready."])
         text = "\n".join(lines)
         await query.message.reply_text(text, parse_mode="HTML", reply_markup=admin_campaign_keyboard(superadmin))
         try:

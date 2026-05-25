@@ -125,7 +125,7 @@ async def start_cycle(started_by: int, duration_days: int = 14) -> dict | None:
 
 async def finish_cycle(finished_by: int) -> dict | None:
     """
-    Finish the active cycle, calculate winners, reset visible XP, and start the next cycle.
+    Finish the active cycle, calculate winners, and reset visible XP.
     """
 
     def _op() -> dict | None:
@@ -152,34 +152,10 @@ async def finish_cycle(finished_by: int) -> dict | None:
 
         client.table("users").update({"xp_points": 0}).neq("telegram_id", 0).execute()
 
-        latest = (
-            client.table("campaign_cycles")
-            .select("cycle_number")
-            .order("cycle_number", desc=True)
-            .limit(1)
-            .execute()
-        )
-        next_number = (latest.data[0]["cycle_number"] + 1) if latest.data else 1
-        start_at = _now()
-        new_cycle = (
-            client.table("campaign_cycles")
-            .insert(
-                {
-                    "cycle_number": next_number,
-                    "status": "active",
-                    "start_at": _iso(start_at),
-                    "end_at": _iso(start_at + timedelta(days=14)),
-                    "started_by": finished_by,
-                    "reward_config": REWARD_CONFIG,
-                }
-            )
-            .execute()
-        )
-
         return {
             "finished_cycle": cycle,
             "winners": winners,
-            "new_cycle": new_cycle.data[0] if new_cycle.data else None,
+            "new_cycle": None,
         }
 
     try:

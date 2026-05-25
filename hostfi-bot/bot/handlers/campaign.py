@@ -1282,9 +1282,21 @@ async def cycle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             await update.effective_message.reply_text(status_text("error", "Could not start cycle."))
             return
         cycle_number = cycle.get("cycle_number")
+        start_at = _parse_iso(cycle.get("start_at"))
+        end_at = _parse_iso(cycle.get("end_at"))
+        start_label = start_at.strftime("%Y-%m-%d %H:%M UTC") if start_at else "Now"
+        end_label = end_at.strftime("%Y-%m-%d %H:%M UTC") if end_at else "Manual finish"
+        duration_label = "14 days" if start_at and end_at and (end_at - start_at).days == 14 else "Until finished"
         await update.effective_message.reply_text(
-            title("Campaign Cycle Started", "✅")
-            + f"\n\n{field('Cycle', f'<b>#{cycle_number}</b>')}",
+            title("Campaign Cycle Active", "✅")
+            + "\n\n"
+            + field("Cycle", f"<b>#{cycle_number}</b>")
+            + "\n"
+            + field("Started", f"<b>{start_label}</b>")
+            + "\n"
+            + field("Scheduled end", f"<b>{end_label}</b>")
+            + "\n"
+            + field("Default length", f"<b>{duration_label}</b>"),
             parse_mode="HTML",
         )
         return
@@ -1307,10 +1319,8 @@ async def cycle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
                 lines.append(
                     f"{i}. {_display_user(row)} — <b>{row['xp']:,} XP</b> ({rewards[i - 1]})"
                 )
-        new_cycle = result.get("new_cycle")
-        if new_cycle:
-            lines.append("")
-            lines.append(f"New cycle started: <b>#{new_cycle.get('cycle_number')}</b>")
+        lines.append("")
+        lines.append("No new cycle was opened. Run <code>/cycle start</code> when ready.")
 
         text = "\n".join(lines)
         await update.effective_message.reply_text(text, parse_mode="HTML")
