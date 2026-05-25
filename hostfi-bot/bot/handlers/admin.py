@@ -14,9 +14,34 @@ from telegram.ext import ContextTypes
 
 from bot.utils.auto_delete import schedule_error_delete
 from bot.utils.formatter import bullet, field, status_text, title
-from bot.utils.permissions import is_admin, is_superadmin
-from bot.utils.permissions import is_admin_channel_chat
-from config import COMMUNITY_GROUP_IDS
+from bot.utils.keyboards import (
+    admin_back_keyboard,
+    admin_campaign_keyboard,
+    admin_confirm_keyboard,
+    admin_dashboard_keyboard,
+    admin_system_keyboard,
+    xpost_review_keyboard,
+)
+from bot.utils.permissions import is_admin, is_admin_channel_chat, is_superadmin
+from bot.utils.x_api import is_x_api_configured
+from config import (
+    ADMIN_CHANNEL_ID,
+    COMMUNITY_GROUP_IDS,
+    GEMINI_API_KEY,
+    GEMINI_MODEL,
+    PRIMARY_COMMUNITY_GROUP_ID,
+    SUPABASE_KEY,
+    SUPABASE_SERVICE_ROLE_KEY,
+    SUPABASE_URL,
+    X_BEARER_TOKEN,
+)
+from database.campaign import (
+    finish_cycle,
+    get_active_cycle,
+    get_campaign_leaderboard,
+    get_pending_x_post_submissions,
+    start_cycle,
+)
 from database.client import get_supabase_client
 from database.logs import log_action
 
@@ -53,6 +78,94 @@ async def _reply_error(
         return
     msg = await update.effective_message.reply_text(text, parse_mode=parse_mode)
     await schedule_error_delete(msg, context, 5)
+
+
+def _yes_no(value: bool) -> str:
+    """Return a compact configured/missing status label."""
+    return "<b>OK</b>" if value else "<b>Missing</b>"
+
+
+async def _send_to_community_groups(bot, **kwargs) -> int:
+    """Send one message to every configured community group."""
+    sent = 0
+    for chat_id in COMMUNITY_GROUP_IDS:
+        await bot.send_message(chat_id=chat_id, **kwargs)
+        sent += 1
+    return sent
+
+
+def _admin_dashboard_text(superadmin: bool = False) -> str:
+    """Build the admin dashboard text."""
+    lines = [
+        title("Admin Dashboard", "🛠️"),
+        "",
+        "Use the buttons below for the common operational flows.",
+        "",
+        bullet("Commands still work as shortcuts."),
+        bullet("Use <code>/adminhelp</code> for the full reference."),
+    ]
+    if superadmin:
+        lines.extend(["", field("Mode", "<b>Superadmin</b>")])
+    return "\n".join(lines)
+
+
+async def _admin_access_ok(
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    *,
+    superadmin_required: bool = False,
+) -> bool:
+    """Validate admin dashboard access for commands and callbacks."""
+    user = update.effective_user
+    chat = update.effective_chat
+    if not user or not chat:
+        return False
+    if not is_admin_channel_chat(chat.id):
+        if update.callback_query:
+            await update.callback_query.answer("Use this in the admin group.", show_alert=True)
+        else:
+            await _reply_error(update, context, status_text("error", "Use this in the admin group."))
+        return False
+    if superadmin_required:
+        allowed = await is_superadmin(user.id)
+    else:
+        allowed = await is_admin(user.id, bot=context.bot)
+    if not allowed:
+        text = "Superadmin only." if superadmin_required else "Admins only."
+        if update.callback_query:
+            await update.callback_query.answer(text, show_alert=True)
+        else:
+            await _reply_error(update, context, status_text("error", text))
+        return False
+    return True
+
+
+async def _send_admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send the main admin dashboard."""
+    if not await _admin_access_ok(update, context):
+        return
+    superadmin = await is_superadmin(update.effective_user.id)
+    await update.effective_message.reply_text(
+        _admin_dashboard_text(superadmin),
+        parse_mode="HTML",
+        reply_markup=admin_dashboard_keyboard(superadmin),
+    )
+
+
+# ---------------------------------------------------------------------------
+# /admin — Button dashboard
+# ---------------------------------------------------------------------------
+
+
+async def admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /admin — show the button-first admin dashboard."""
+    try:
+        if not update.effective_user or not update.effective_message:
+            return
+        await _send_admin_panel(update, context)
+    except Exception as exc:
+        logger.error("Error in admin_command: %s", exc)
+        await _reply_error(update, context, status_text("warning", "Could not open admin dashboard."))
 
 
 # ---------------------------------------------------------------------------
@@ -486,6 +599,7 @@ async def adminhelp_command(
                 title("Admin Commands", "🛠️"),
                 "",
                 title("Dashboard"),
+                bullet("<code>/admin</code> — Button dashboard"),
                 bullet("<code>/stats</code> — Bot and community stats"),
                 bullet("<code>/lookup &lt;id&gt;</code> — User record"),
                 "",
@@ -502,6 +616,8 @@ async def adminhelp_command(
                 bullet("<code>/raid create &lt;url&gt; [minutes]</code> — Create raid"),
                 bullet("<code>/invites @username</code> — Invite stats"),
                 bullet("<code>/award helpful [reason]</code> — Award helpful message"),
+                bullet("Reply: <code>/xp add 100</code> — Add XP to replied user"),
+                bullet("Reply: <code>/xp deduct 50</code> — Deduct XP from replied user"),
                 bullet("<code>/xp add @username AMOUNT</code> — Add XP"),
                 bullet("<code>/xp deduct @username AMOUNT</code> — Deduct XP"),
                 bullet("<code>/xp disqualify @username reason</code> — Disqualify user"),
@@ -522,6 +638,378 @@ async def adminhelp_command(
 
     except Exception as exc:
         logger.error("Error in adminhelp_command: %s", exc)
+
+
+# ---------------------------------------------------------------------------
+# Admin dashboard callbacks
+# ---------------------------------------------------------------------------
+
+
+def _leaderboard_preview_lines(rows: list[dict], *, limit: int = 5) -> list[str]:
+    """Build compact leaderboard preview lines."""
+    rewards = ["$25", "$20", "$15", "$12", "$8"]
+    if not rows:
+        return ["No ranked users yet."]
+    lines = []
+    for index, row in enumerate(rows[:limit], 1):
+        name = row.get("first_name") or row.get("username") or row.get("telegram_id")
+        reward = f" ({rewards[index - 1]})" if index <= len(rewards) else ""
+        lines.append(f"{index}. <b>{html.escape(str(name))}</b> — {int(row.get('xp') or 0):,} XP{reward}")
+    return lines
+
+
+async def _run_reindex_from_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Run the knowledge base reindex flow from a dashboard callback."""
+    status_msg = await update.effective_message.reply_text(
+        "Re-indexing knowledge base. This may take a moment."
+    )
+
+    from rag.ingestion import run_ingestion
+
+    summary = await run_ingestion(clear_existing=True)
+    await status_msg.edit_text(
+        title("Knowledge Base Re-indexed", "✅")
+        + f"\n\n{field('Files loaded', summary['files_loaded'])}"
+        + f"\n{field('URLs scraped', summary['urls_scraped'])}"
+        + f"\n{field('Total chunks', summary['total_chunks'])}"
+        + f"\n{field('Chunks stored', summary['chunks_stored'])}",
+        parse_mode="HTML",
+    )
+    await log_action(
+        action="reindex",
+        admin_telegram_id=update.effective_user.id,
+        metadata=summary,
+    )
+
+
+async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin dashboard inline buttons."""
+    query = update.callback_query
+    if not query or not query.data or not query.message:
+        return
+
+    data = query.data
+
+    if not await _admin_access_ok(update, context):
+        return
+    await query.answer()
+
+    superadmin = await is_superadmin(query.from_user.id)
+
+    if data == "admin_home":
+        await query.message.reply_text(
+            _admin_dashboard_text(superadmin),
+            parse_mode="HTML",
+            reply_markup=admin_dashboard_keyboard(superadmin),
+        )
+        return
+
+    if data == "admin_tickets":
+        from bot.handlers.tickets import tickets_command
+
+        await tickets_command(update, context)
+        return
+
+    if data == "admin_stats":
+        await stats_command(update, context)
+        return
+
+    if data == "admin_xposts":
+        submissions = await get_pending_x_post_submissions(limit=10)
+        await query.message.reply_text(
+            "\n".join(
+                [
+                    title("X Post Reviews", "📝"),
+                    "",
+                    field("Pending", f"<b>{len(submissions)}</b>"),
+                    "",
+                    "Review cards are posted here automatically when users submit posts.",
+                ]
+            ),
+            parse_mode="HTML",
+            reply_markup=admin_back_keyboard(),
+        )
+        if submissions:
+            from bot.handlers.campaign import _xpost_review_context, _xpost_review_text
+
+            for submission in submissions:
+                user_link, linked_handle, url_handle, url_handle_matches = await _xpost_review_context(submission)
+                await query.message.reply_text(
+                    _xpost_review_text(
+                        submission,
+                        user_link=user_link,
+                        linked_handle=linked_handle,
+                        url_handle=url_handle,
+                        url_handle_matches=url_handle_matches,
+                    ),
+                    parse_mode="HTML",
+                    reply_markup=xpost_review_keyboard(int(submission["id"]), str(submission.get("proof_url") or "")),
+                )
+        return
+
+    if data == "admin_campaign":
+        cycle = await get_active_cycle()
+        lines = [title("Campaign Admin", "🏆"), ""]
+        if cycle:
+            lines.append(field("Active cycle", f"<b>#{cycle.get('cycle_number')}</b>"))
+            lines.append(field("Status", f"<b>{html.escape(str(cycle.get('status')))}</b>"))
+        else:
+            lines.append("No active cycle.")
+        lines.extend(["", "Use the buttons below for campaign operations."])
+        await query.message.reply_text(
+            "\n".join(lines),
+            parse_mode="HTML",
+            reply_markup=admin_campaign_keyboard(superadmin),
+        )
+        return
+
+    if data == "admin_campaign_leaderboard":
+        rows = await get_campaign_leaderboard(5)
+        await query.message.reply_text(
+            "\n".join([title("Campaign Top 5", "🏅"), "", *_leaderboard_preview_lines(rows)]),
+            parse_mode="HTML",
+            reply_markup=admin_campaign_keyboard(superadmin),
+        )
+        return
+
+    if data == "admin_raids":
+        await query.message.reply_text(
+            "\n".join(
+                [
+                    title("Raid Admin", "⚡"),
+                    "",
+                    bullet("<code>/raid create X_POST_URL [minutes]</code> — Create a raid"),
+                    bullet("<code>/raids</code> — View active raids"),
+                    "",
+                    "Raid proof submission remains private for users.",
+                ]
+            ),
+            parse_mode="HTML",
+            reply_markup=admin_back_keyboard(),
+        )
+        return
+
+    if data == "admin_xp":
+        await query.message.reply_text(
+            "\n".join(
+                [
+                    title("XP Tools", "⭐"),
+                    "",
+                    title("Fast Reply Shortcuts"),
+                    bullet("Reply to a user message with <code>/xp add 100</code>"),
+                    bullet("Reply to a user message with <code>/xp deduct 50</code>"),
+                    "",
+                    title("Direct Commands"),
+                    bullet("<code>/xp add @username 100</code>"),
+                    bullet("<code>/xp deduct @username 50</code>"),
+                    bullet("<code>/xp disqualify @username reason</code>"),
+                    "",
+                    "Large XP changes and disqualification should be double-checked before sending.",
+                ]
+            ),
+            parse_mode="HTML",
+            reply_markup=admin_back_keyboard(),
+        )
+        return
+
+    if data == "admin_broadcasts":
+        await query.message.reply_text(
+            "\n".join(
+                [
+                    title("Broadcasts", "📣"),
+                    "",
+                    bullet("<code>/broadcast</code> — Guided rich broadcast flow"),
+                    bullet("<code>/announce your message</code> — Quick announcement"),
+                    bullet('<code>/poll "Question?" "Option 1" "Option 2"</code> — Poll'),
+                ]
+            ),
+            parse_mode="HTML",
+            reply_markup=admin_back_keyboard(),
+        )
+        return
+
+    if data == "admin_moderation":
+        await query.message.reply_text(
+            "\n".join(
+                [
+                    title("Moderation", "🛡️"),
+                    "",
+                    bullet("Reply with <code>/warn reason</code>"),
+                    bullet("Reply with <code>/mute 30m reason</code>"),
+                    bullet("Reply with <code>/ban reason</code>"),
+                    bullet("<code>/kick</code>, <code>/unmute</code>, <code>/unban</code>, <code>/pin</code>"),
+                ]
+            ),
+            parse_mode="HTML",
+            reply_markup=admin_back_keyboard(),
+        )
+        return
+
+    if data == "admin_system":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        await query.message.reply_text(
+            "\n".join(
+                [
+                    title("System", "⚙️"),
+                    "",
+                    "Superadmin-only checks and maintenance actions.",
+                ]
+            ),
+            parse_mode="HTML",
+            reply_markup=admin_system_keyboard(),
+        )
+        return
+
+    if data == "admin_config_health":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        await query.message.reply_text(
+            "\n".join(
+                [
+                    title("Config Health", "🧪"),
+                    "",
+                    field("Admin channel", _yes_no(bool(ADMIN_CHANNEL_ID))),
+                    field("Community groups", f"<b>{len(COMMUNITY_GROUP_IDS)}</b>"),
+                    field("Primary group", f"<code>{PRIMARY_COMMUNITY_GROUP_ID}</code>" if PRIMARY_COMMUNITY_GROUP_ID else "<b>Missing</b>"),
+                    field("Gemini key", _yes_no(bool(GEMINI_API_KEY))),
+                    field("Gemini model", f"<code>{html.escape(GEMINI_MODEL)}</code>"),
+                    field("X bearer token", _yes_no(bool(X_BEARER_TOKEN))),
+                    field("Supabase URL", _yes_no(bool(SUPABASE_URL))),
+                    field("Service role key", _yes_no(bool(SUPABASE_SERVICE_ROLE_KEY))),
+                    field("Supabase key active", _yes_no(bool(SUPABASE_KEY))),
+                ]
+            ),
+            parse_mode="HTML",
+            reply_markup=admin_system_keyboard(),
+        )
+        return
+
+    if data == "admin_api_status":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        await query.message.reply_text(
+            "\n".join(
+                [
+                    title("API Status", "🔌"),
+                    "",
+                    field("Gemini", _yes_no(bool(GEMINI_API_KEY))),
+                    field("Gemini model", f"<code>{html.escape(GEMINI_MODEL)}</code>"),
+                    field("X API", _yes_no(is_x_api_configured())),
+                    field("Supabase", _yes_no(bool(SUPABASE_URL and SUPABASE_KEY))),
+                    "",
+                    "This checks configuration only; it does not spend API credits.",
+                ]
+            ),
+            parse_mode="HTML",
+            reply_markup=admin_system_keyboard(),
+        )
+        return
+
+    if data == "admin_cycle_start_preview":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        cycle = await get_active_cycle()
+        if cycle:
+            await query.message.reply_text(
+                status_text("info", f"Cycle #{cycle.get('cycle_number')} is already active."),
+                parse_mode="HTML",
+                reply_markup=admin_campaign_keyboard(superadmin),
+            )
+            return
+        await query.message.reply_text(
+            title("Start Campaign Cycle", "⚠️")
+            + "\n\nThis will start a new cycle and reset visible campaign XP.",
+            parse_mode="HTML",
+            reply_markup=admin_confirm_keyboard("admin_cycle_start_confirm", "admin_campaign"),
+        )
+        return
+
+    if data == "admin_cycle_start_confirm":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        cycle = await start_cycle(query.from_user.id)
+        if not cycle:
+            await query.message.reply_text(status_text("error", "Could not start cycle."), parse_mode="HTML")
+            return
+        await query.message.reply_text(
+            title("Campaign Cycle Started", "✅")
+            + "\n\n"
+            + field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>"),
+            parse_mode="HTML",
+            reply_markup=admin_campaign_keyboard(superadmin),
+        )
+        return
+
+    if data == "admin_cycle_finish_preview":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        cycle = await get_active_cycle()
+        if not cycle:
+            await query.message.reply_text(status_text("error", "No active cycle to finish."), parse_mode="HTML")
+            return
+        winners = await get_campaign_leaderboard(5)
+        lines = [
+            title("Finish Campaign Cycle", "⚠️"),
+            "",
+            field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>"),
+            "",
+            title("Projected Winners"),
+            *_leaderboard_preview_lines(winners),
+            "",
+            "Confirming will finalize winners, reset visible XP, close current raids, and start the next cycle.",
+        ]
+        await query.message.reply_text(
+            "\n".join(lines),
+            parse_mode="HTML",
+            reply_markup=admin_confirm_keyboard("admin_cycle_finish_confirm", "admin_campaign"),
+        )
+        return
+
+    if data == "admin_cycle_finish_confirm":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        result = await finish_cycle(query.from_user.id)
+        if not result:
+            await query.message.reply_text(status_text("error", "No active cycle to finish."), parse_mode="HTML")
+            return
+        winners = result["winners"]
+        lines = [
+            title(f"Cycle #{result['finished_cycle'].get('cycle_number')} Finished", "🏁"),
+            "",
+            *_leaderboard_preview_lines(winners),
+        ]
+        new_cycle = result.get("new_cycle")
+        if new_cycle:
+            lines.extend(["", f"New cycle started: <b>#{new_cycle.get('cycle_number')}</b>"])
+        text = "\n".join(lines)
+        await query.message.reply_text(text, parse_mode="HTML", reply_markup=admin_campaign_keyboard(superadmin))
+        try:
+            await _send_to_community_groups(context.bot, text=text, parse_mode="HTML")
+        except Exception as exc:
+            logger.warning("Could not announce cycle finish to community: %s", exc)
+        return
+
+    if data == "admin_reindex_preview":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        await query.message.reply_text(
+            title("Reindex Knowledge Base", "⚠️")
+            + "\n\nThis clears and rebuilds the RAG knowledge base. It may take a moment.",
+            parse_mode="HTML",
+            reply_markup=admin_confirm_keyboard("admin_reindex_confirm", "admin_system"),
+        )
+        return
+
+    if data == "admin_reindex_confirm":
+        if not await _admin_access_ok(update, context, superadmin_required=True):
+            return
+        try:
+            await _run_reindex_from_message(update, context)
+        except Exception as exc:
+            logger.error("Dashboard reindex failed: %s", exc)
+            await _reply_error(update, context, status_text("warning", f"Re-indexing failed: {str(exc)}"))
+        return
 
 
 # ---------------------------------------------------------------------------

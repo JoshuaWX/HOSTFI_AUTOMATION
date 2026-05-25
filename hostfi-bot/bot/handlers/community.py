@@ -29,6 +29,7 @@ from bot.utils.formatter import (
     title,
 )
 from bot.utils.keyboards import (
+    campaign_group_keyboard,
     campaign_home_keyboard,
     generate_captcha_options,
     verification_keyboard,
@@ -598,30 +599,22 @@ PRIVATE_HELP_TEXT = "\n".join(
     [
         title("HOSTFI Bot", "📚"),
         "",
-        "Your private workspace for support, campaign actions, and X verification.",
+        "Use <code>/start</code> in DM as your main dashboard.",
         "",
-        title("Support"),
-        bullet("<code>/ask</code> — Ask the AI assistant"),
-        bullet("<code>/support</code> — Open a support ticket"),
+        title("Dashboards"),
+        bullet("<code>/start</code> — Private user dashboard"),
+        bullet("<code>/campaign</code> — Campaign panel"),
         "",
-        title("Campaign"),
-        bullet("<code>/campaign</code> — Open the XP panel"),
-        bullet("<code>/xp</code> — View your campaign XP"),
-        bullet("<code>/rank</code> — View your leaderboard rank"),
-        bullet("<code>/leaderboard</code> — View top members"),
-        bullet("<code>/invite</code> — Get your invite link"),
-        bullet("<code>/invites</code> — View invite stats"),
+        title("Useful Shortcuts"),
+        bullet("<code>/xp</code> — View campaign XP"),
         bullet("<code>/raids</code> — View active raids"),
+        bullet("<code>/leaderboard</code> — View top members"),
+        bullet("<code>/support</code> — Open a ticket"),
+        bullet("<code>/ask</code> — Ask the AI assistant"),
         "",
-        title("X Account"),
-        bullet("<code>/xlink @handle</code> — Start account linking"),
-        bullet("<code>/xverify URL</code> — Verify your X account"),
-        bullet("<code>/xpost URL</code> — Submit a post for admin review"),
+        "Invite links, X linking, X posts, and raid proof submission are available from the dashboard buttons.",
         "",
-        title("Community"),
         bullet("<code>/rules</code> — Read the group rules"),
-        "",
-        "Use the buttons below for campaign actions.",
     ]
 )
 
@@ -629,7 +622,7 @@ GROUP_HELP_TEXT = "\n".join(
     [
         title("HOSTFI Bot", "📚"),
         "",
-        "Group-safe commands stay public. Private flows continue in DM.",
+        "Use <code>/campaign</code> in the group for the public campaign panel.",
         "",
         title("Campaign"),
         bullet("<code>/campaign</code> — Open the XP panel"),
@@ -649,16 +642,18 @@ ADMIN_HELP_TEXT = "\n".join(
     [
         title("HOSTFI Admin", "📚"),
         "",
-        "Quick admin pointers. Use <code>/adminhelp</code> for the full reference.",
+        "Use <code>/admin</code> for the dashboard and <code>/adminhelp</code> for the full reference.",
         "",
         title("Operations"),
+        bullet("<code>/admin</code> — Open admin dashboard"),
         bullet("<code>/tickets</code> — View active tickets"),
         bullet("<code>/stats</code> — View bot stats"),
         bullet("<code>/cycle</code> — Manage campaign cycles"),
         bullet("<code>/raid create</code> — Create a raid"),
         bullet("<code>/award helpful</code> — Award helpful XP"),
         bullet("<code>/invites @username</code> — View invite stats"),
-        bullet("<code>/xp add|deduct|disqualify</code> — Adjust campaign XP"),
+        bullet("Reply shortcut: <code>/xp add 100</code> or <code>/xp deduct 50</code>"),
+        bullet("Direct: <code>/xp add|deduct|disqualify</code>"),
     ]
 )
 
@@ -676,6 +671,8 @@ def _help_keyboard_for_chat(chat_id: int | None, chat_type: str | None):
     """Return campaign buttons only where they make sense."""
     if is_admin_channel_chat(chat_id):
         return None
+    if chat_type in ("group", "supergroup"):
+        return campaign_group_keyboard()
     return campaign_home_keyboard()
 
 

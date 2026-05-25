@@ -112,20 +112,15 @@ async def lifespan(app: FastAPI):
     # ---- Scoped command menus ----
     # Private chat commands (all users)
     private_commands = [
+        BotCommand("start", "Open dashboard"),
         BotCommand("help", "Show available commands"),
         BotCommand("rules", "View community rules"),
-        BotCommand("ask", "Ask the AI assistant"),
-        BotCommand("support", "Open a support ticket"),
         BotCommand("campaign", "Current XP campaign"),
         BotCommand("xp", "Your campaign XP"),
-        BotCommand("invite", "Your campaign invite link"),
-        BotCommand("invites", "Your invite stats"),
-        BotCommand("xlink", "Link your X account"),
-        BotCommand("xverify", "Verify your X account"),
         BotCommand("raids", "View active raids"),
-        BotCommand("xpost", "Submit X post for review"),
-        BotCommand("rank", "View your XP rank"),
         BotCommand("leaderboard", "Community leaderboard"),
+        BotCommand("support", "Open a support ticket"),
+        BotCommand("ask", "Ask the AI assistant"),
     ]
     await _bot_app.bot.set_my_commands(
         private_commands,
@@ -150,6 +145,7 @@ async def lifespan(app: FastAPI):
     # Admin commands in the admin channel
     if ADMIN_CHANNEL_ID:
         admin_commands = [
+            BotCommand("admin", "Open admin dashboard"),
             BotCommand("tickets", "View open tickets"),
             BotCommand("reply", "Reply to a ticket"),
             BotCommand("close", "Close a ticket"),

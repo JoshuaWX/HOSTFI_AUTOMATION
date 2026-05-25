@@ -263,12 +263,14 @@ def _register_command_handlers(app: Application) -> None:
 
     # M6: Admin dashboard
     from bot.handlers.admin import (
+        admin_command,
         adminhelp_command,
         lookup_command,
         reindex_command,
         stats_command,
     )
 
+    app.add_handler(CommandHandler("admin", admin_command))
     app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CommandHandler("lookup", lookup_command))
     app.add_handler(CommandHandler("reindex", reindex_command))
@@ -285,6 +287,7 @@ def _register_command_handlers(app: Application) -> None:
 def _register_callback_handlers(app: Application) -> None:
     """Register all inline keyboard callback handlers."""
 
+    from bot.handlers.admin import admin_callback_handler
     from bot.handlers.broadcast import broadcast_confirm_callback
     from bot.handlers.campaign import (
         campaign_callback_handler,
@@ -325,6 +328,10 @@ def _register_callback_handlers(app: Application) -> None:
 
     app.add_handler(
         CallbackQueryHandler(xpost_review_callback, pattern=r"^xpost_(approve|reject)_")
+    )
+
+    app.add_handler(
+        CallbackQueryHandler(admin_callback_handler, pattern=r"^admin_")
     )
 
     app.add_handler(

@@ -18,8 +18,10 @@ from bot.utils.auto_delete import (
     schedule_delete,
     send_dm_redirect_status,
 )
-from bot.utils.formatter import bullet, field, status_text, title
+from bot.utils.formatter import bullet, field, format_rules, status_text, title
 from bot.utils.keyboards import (
+    campaign_earn_keyboard,
+    campaign_group_keyboard,
     campaign_cancel_keyboard,
     campaign_home_keyboard,
     campaign_raid_keyboard,
@@ -209,6 +211,42 @@ def _campaign_home_text(cycle: dict) -> str:
     )
 
 
+def _user_dashboard_text() -> str:
+    """Build the private user dashboard text."""
+    return "\n".join(
+        [
+            title("HOSTFI Dashboard", "🏠"),
+            "",
+            "Use the buttons below to manage XP, invites, raids, X posts, and support.",
+            "",
+            "Most private actions happen here in DM so the group stays clean.",
+        ]
+    )
+
+
+def _earn_xp_text() -> str:
+    """Build the earning guide text."""
+    return "\n".join(
+        [
+            title("Earn XP", "⭐"),
+            "",
+            bullet(f"Invite friends — <b>{XP_INVITE} XP</b> after {_retention_label()}"),
+            bullet(f"Join approved raids — <b>{XP_RAID} XP</b>"),
+            bullet("Submit HostFi X posts — admin-reviewed"),
+            bullet(f"Helpful contributions — <b>{XP_HELPFUL} XP</b> with admin approval"),
+            "",
+            "Choose an earning path below.",
+        ]
+    )
+
+
+def _campaign_keyboard_for_message(message: Message):
+    """Return the right campaign keyboard for DM or group contexts."""
+    if message.chat.type in ("group", "supergroup") and is_community_group_chat(message.chat_id):
+        return campaign_group_keyboard()
+    return campaign_home_keyboard()
+
+
 async def _send_campaign_home(
     message: Message,
     context: ContextTypes.DEFAULT_TYPE | None = None,
@@ -223,7 +261,7 @@ async def _send_campaign_home(
     reply = await message.reply_text(
         _campaign_home_text(cycle),
         parse_mode="HTML",
-        reply_markup=campaign_home_keyboard(),
+        reply_markup=_campaign_keyboard_for_message(message),
     )
     if context:
         await schedule_delete(reply, context, 60)
@@ -1216,15 +1254,18 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     """Superadmin manual XP add/deduct/disqualify controls."""
     if not update.effective_user or not update.effective_message:
         return
-    if not is_admin_channel_chat(update.effective_chat.id if update.effective_chat else None):
-        await update.effective_message.reply_text(status_text("error", "Use this in the admin channel."))
-        return
     if not await is_superadmin(update.effective_user.id):
         await update.effective_message.reply_text(status_text("error", "Superadmin only."))
         return
-    if len(context.args) < 3:
+
+    chat_id = update.effective_chat.id if update.effective_chat else None
+    in_admin_channel = is_admin_channel_chat(chat_id)
+    in_community_group = _is_community_group_update(update)
+    args = context.args or []
+    if len(args) < 2:
         await update.effective_message.reply_text(
             "Usage:\n"
+            "Reply: <code>/xp add 100</code> or <code>/xp deduct 50</code>\n"
             "<code>/xp add @username AMOUNT</code>\n"
             "<code>/xp deduct @username AMOUNT</code>\n"
             "<code>/xp disqualify @username reason</code>",
@@ -1232,31 +1273,63 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         )
         return
 
-    action = context.args[0].lower()
+    action = args[0].lower()
     if action in ("add", "deduct"):
-        if len(context.args) != 3:
+        reply_target = update.effective_message.reply_to_message
+        if len(args) == 2:
+            if not in_community_group:
+                await update.effective_message.reply_text(
+                    status_text("error", "Reply-based XP shortcuts can only be used in the community group.")
+                )
+                return
+            if not reply_target or not reply_target.from_user:
+                await update.effective_message.reply_text(
+                    status_text("error", "Reply to the user message you want to adjust.")
+                )
+                return
+            if reply_target.from_user.is_bot:
+                await update.effective_message.reply_text(status_text("error", "Cannot adjust XP for bot accounts."))
+                return
+            await get_or_create_user(
+                reply_target.from_user.id,
+                reply_target.from_user.username,
+                reply_target.from_user.first_name,
+            )
+            target_id = int(reply_target.from_user.id)
+            target_display = _profile_link(
+                target_id,
+                reply_target.from_user.username,
+                reply_target.from_user.first_name,
+            )
+            amount_raw = args[1]
+        elif len(args) == 3:
+            if not in_admin_channel:
+                await update.effective_message.reply_text(status_text("error", "Use direct username XP commands in the admin channel."))
+                return
+            username = args[1]
+            if not username.startswith("@"):
+                await update.effective_message.reply_text(
+                    status_text("error", "Use a Telegram username, like @username.")
+                )
+                return
+            user_row = await get_user_by_username(username)
+            if not user_row:
+                await update.effective_message.reply_text(
+                    status_text("error", f"{username} is not known to the bot yet. The user must join or message the bot first.")
+                )
+                return
+            target_id = int(user_row["telegram_id"])
+            target_display = f"<b>@{html.escape(str(user_row.get('username') or username).lstrip('@'))}</b>"
+            amount_raw = args[2]
+        else:
             await update.effective_message.reply_text(
-                "Usage: <code>/xp add @username AMOUNT</code> or "
-                "<code>/xp deduct @username AMOUNT</code>",
+                "Usage: reply with <code>/xp add 100</code>, or use "
+                "<code>/xp add @username 100</code> in the admin channel.",
                 parse_mode="HTML",
             )
             return
-        username = context.args[1]
-        if not username.startswith("@"):
-            await update.effective_message.reply_text(
-                status_text("error", "Use a Telegram username, like @username.")
-            )
-            return
-        user_row = await get_user_by_username(username)
-        if not user_row:
-            await update.effective_message.reply_text(
-                status_text("error", f"{username} is not known to the bot yet. The user must join or message the bot first.")
-            )
-            return
-        target_id = int(user_row["telegram_id"])
-        target_display = f"<b>@{html.escape(str(user_row.get('username') or username).lstrip('@'))}</b>"
         try:
-            amount = int(context.args[2])
+            amount = int(amount_raw)
         except ValueError:
             await update.effective_message.reply_text(status_text("error", "AMOUNT must be a number."))
             return
@@ -1267,7 +1340,16 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         reason = f"Manual XP {action} by superadmin"
         event_type = "manual_add" if action == "add" else "manual_deduct"
     elif action == "disqualify":
-        username = context.args[1]
+        if not in_admin_channel:
+            await update.effective_message.reply_text(status_text("error", "Use disqualification in the admin channel."))
+            return
+        if len(args) < 3:
+            await update.effective_message.reply_text(
+                "Usage: <code>/xp disqualify @username reason</code>",
+                parse_mode="HTML",
+            )
+            return
+        username = args[1]
         if not username.startswith("@"):
             await update.effective_message.reply_text(
                 status_text("error", "Use a Telegram username, like @username.")
@@ -1284,7 +1366,7 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         target_display = f"<b>@{html.escape(str(user_row.get('username') or username).lstrip('@'))}</b>"
         rank_xp, _, _, _ = await get_campaign_rank(target_id)
         signed_amount = -rank_xp
-        reason = " ".join(context.args[2:]) or "Disqualified by superadmin"
+        reason = " ".join(args[2:]) or "Disqualified by superadmin"
         event_type = "disqualification"
     else:
         await update.effective_message.reply_text(status_text("error", "Unknown XP action."))
@@ -1310,6 +1392,8 @@ async def xp_admin_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
         parse_mode="HTML",
     )
     await schedule_any_delete(reply, context, 30)
+    if in_community_group:
+        await schedule_command_delete(update, context, 30)
     await log_action(
         f"xp_{event_type}",
         update.effective_user.id,
@@ -1532,6 +1616,61 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
 
     if data == "campaign_home":
         await _send_campaign_home(query.message, context)
+        return
+
+    if data == "campaign_dm_dashboard":
+        try:
+            await context.bot.send_message(
+                chat_id=query.from_user.id,
+                text=_user_dashboard_text(),
+                parse_mode="HTML",
+                reply_markup=campaign_home_keyboard(),
+            )
+        except Exception:
+            await send_dm_redirect_status(update, context, dm_sent=False)
+            return
+        await send_dm_redirect_status(update, context, dm_sent=True)
+        return
+
+    if data == "campaign_earn":
+        reply = await query.message.reply_text(
+            _earn_xp_text(),
+            parse_mode="HTML",
+            reply_markup=campaign_earn_keyboard(),
+        )
+        await schedule_delete(reply, context, 60)
+        return
+
+    if data == "campaign_rules":
+        reply = await query.message.reply_text(format_rules(), parse_mode="HTML")
+        await schedule_delete(reply, context, 90)
+        return
+
+    if data == "campaign_support":
+        prompt = (
+            f"{title('HOSTFI Support', '🎫')}\n\n"
+            "Please briefly describe your issue in a single message.\n\n"
+            "<i>Be specific to help our team resolve it faster.</i>\n\n"
+            "Send <code>/cancel</code> to abort."
+        )
+        from bot.handlers.tickets import SUPPORT_PENDING_DM_KEY
+
+        if query.message.chat.type in ("group", "supergroup"):
+            try:
+                await context.bot.send_message(
+                    chat_id=query.from_user.id,
+                    text=prompt,
+                    parse_mode="HTML",
+                )
+                context.user_data[SUPPORT_PENDING_DM_KEY] = True
+            except Exception:
+                await send_dm_redirect_status(update, context, dm_sent=False)
+                return
+            await send_dm_redirect_status(update, context, dm_sent=True)
+        else:
+            context.user_data[SUPPORT_PENDING_DM_KEY] = True
+            reply = await query.message.reply_text(prompt, parse_mode="HTML")
+            await schedule_delete(reply, context, 60)
         return
 
     if data == "campaign_xp":

@@ -13,9 +13,14 @@ from datetime import datetime, timedelta, timezone
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, LinkPreviewOptions, Update
 from telegram.ext import ContextTypes, ConversationHandler, filters
 
-from bot.utils.auto_delete import schedule_any_delete, schedule_command_delete, schedule_delete
+from bot.utils.auto_delete import (
+    schedule_any_delete,
+    schedule_command_delete,
+    schedule_delete,
+    send_dm_redirect_status,
+)
 from bot.utils.formatter import bullet, field, status_text, title
-from bot.utils.keyboards import confirm_broadcast_keyboard
+from bot.utils.keyboards import campaign_home_keyboard, confirm_broadcast_keyboard
 from bot.utils.permissions import is_admin
 from bot.utils.rate_limiter import check_rate_limit, get_redis
 from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_IDS, TELEGRAM_BOT_TOKEN
@@ -26,6 +31,24 @@ from database.users import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+def _start_dashboard_text() -> str:
+    """Build the private start/dashboard text."""
+    return "\n".join(
+        [
+            title("HOSTFI Dashboard", "👋"),
+            "",
+            "Use this private dashboard for support, campaign actions, and X verification.",
+            "",
+            title("Main Paths"),
+            bullet("Check XP and leaderboard"),
+            bullet("Invite friends and track referrals"),
+            bullet("Join raids and submit proof"),
+            bullet("Submit X posts for admin review"),
+            bullet("Open support when you need help"),
+        ]
+    )
 
 
 async def _send_to_community_groups(bot, method: str, **kwargs) -> int:
@@ -72,36 +95,24 @@ async def start_command(
         user = update.effective_user
         await get_or_create_user(user.id, user.username, user.first_name)
 
+        if update.effective_chat and update.effective_chat.type != "private":
+            try:
+                await context.bot.send_message(
+                    chat_id=user.id,
+                    text=_start_dashboard_text(),
+                    parse_mode="HTML",
+                    reply_markup=campaign_home_keyboard(),
+                )
+            except Exception:
+                await send_dm_redirect_status(update, context, dm_sent=False)
+                return
+            await send_dm_redirect_status(update, context, dm_sent=True)
+            return
+
         await update.effective_message.reply_text(
-            "\n".join(
-                [
-                    title("HOSTFI Bot", "👋"),
-                    "",
-                    "Your private workspace for support, campaign actions, and X verification.",
-                    "",
-                    title("Support"),
-                    bullet("<code>/ask</code> — Ask the AI assistant"),
-                    bullet("<code>/support</code> — Open a support ticket"),
-                    "",
-                    title("Campaign"),
-                    bullet("<code>/campaign</code> — Open the XP panel"),
-                    bullet("<code>/xp</code> — View your campaign XP"),
-                    bullet("<code>/rank</code> — View your leaderboard rank"),
-                    bullet("<code>/leaderboard</code> — View top members"),
-                    bullet("<code>/invite</code> — Get your invite link"),
-                    bullet("<code>/invites</code> — View invite stats"),
-                    bullet("<code>/raids</code> — View active raids"),
-                    "",
-                    title("X Account"),
-                    bullet("<code>/xlink @handle</code> — Start account linking"),
-                    bullet("<code>/xverify URL</code> — Verify your X account"),
-                    bullet("<code>/xpost URL</code> — Submit a post for admin review"),
-                    "",
-                    title("Community"),
-                    bullet("<code>/rules</code> — Read the group rules"),
-                ]
-            ),
+            _start_dashboard_text(),
             parse_mode="HTML",
+            reply_markup=campaign_home_keyboard(),
         )
 
     except Exception as exc:

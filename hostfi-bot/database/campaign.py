@@ -1028,6 +1028,28 @@ async def get_x_post_submission(submission_id: int) -> dict | None:
         return None
 
 
+async def get_pending_x_post_submissions(limit: int = 10) -> list[dict]:
+    """Return pending personal X post submissions for admin review."""
+
+    def _op() -> list[dict]:
+        client = get_supabase_client()
+        result = (
+            client.table("x_post_submissions")
+            .select("*")
+            .eq("status", "pending")
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to get pending X post submissions: %s", exc)
+        return []
+
+
 async def mark_x_post_submission_reviewed(
     submission_id: int,
     status: str,
