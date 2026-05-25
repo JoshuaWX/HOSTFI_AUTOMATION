@@ -226,6 +226,7 @@ def _register_command_handlers(app: Application) -> None:
     # Campaign XP
     from bot.handlers.campaign import (
         award_command,
+        campaign_cancel_command,
         campaign_command,
         cycle_command,
         invite_command,
@@ -239,6 +240,7 @@ def _register_command_handlers(app: Application) -> None:
     )
 
     app.add_handler(CommandHandler("campaign", campaign_command))
+    app.add_handler(CommandHandler("cancel", campaign_cancel_command))
     app.add_handler(CommandHandler("xp", xp_router_command))
     app.add_handler(CommandHandler("invite", invite_command))
     app.add_handler(CommandHandler("invites", invites_command))
@@ -394,6 +396,17 @@ def _register_message_handlers(app: Application) -> None:
     # Campaign button flows consume the user's next text message when pending.
     app.add_handler(
         MessageHandler(
+            filters.TEXT
+            & ~filters.COMMAND
+            & ~filters.StatusUpdate.ALL,
+            campaign_guided_input_handler,
+        ),
+        group=1,
+    )
+
+    # Support ticket DM prompt should run after campaign pending checks.
+    app.add_handler(
+        MessageHandler(
             filters.ChatType.PRIVATE
             & filters.TEXT
             & ~filters.COMMAND
@@ -401,18 +414,7 @@ def _register_message_handlers(app: Application) -> None:
             support_pending_dm_handler,
             block=False,
         ),
-        group=1,
-    )
-
-    # Campaign button flows consume the user's next text message when pending.
-    app.add_handler(
-        MessageHandler(
-            filters.TEXT
-            & ~filters.COMMAND
-            & ~filters.StatusUpdate.ALL,
-            campaign_guided_input_handler,
-        ),
-        group=1,
+        group=2,
     )
 
     # Group message filter (spam, scam, flood, +XP)
@@ -424,7 +426,7 @@ def _register_message_handlers(app: Application) -> None:
             & ~filters.StatusUpdate.ALL,
             group_message_filter,
         ),
-        group=2,
+        group=3,
     )
 
     logger.info("Message handlers registered")

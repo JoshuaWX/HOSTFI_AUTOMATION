@@ -6,7 +6,9 @@ Author: HOSTFI Bot Team
 
 import html
 import logging
+import re
 import secrets
+import time
 from datetime import datetime, timedelta, timezone
 
 from telegram import LinkPreviewOptions, Message, Update
@@ -85,6 +87,51 @@ from database.users import get_or_create_user, get_user, get_user_by_username
 logger = logging.getLogger(__name__)
 
 PENDING_ACTION_KEY = "campaign_pending_action"
+PENDING_TTL_SECONDS = 900
+HANDLE_RE = re.compile(r"^@?[A-Za-z0-9_]{1,15}$")
+
+
+def _now_ts() -> int:
+    """Return the current Unix timestamp in seconds."""
+    return int(time.time())
+
+
+def _pending_is_expired(pending: dict) -> bool:
+    """Return True when a pending action is missing or past the TTL."""
+    created_at = pending.get("created_at") if isinstance(pending, dict) else None
+    if not isinstance(created_at, (int, float)):
+        return True
+    return (_now_ts() - int(created_at)) > PENDING_TTL_SECONDS
+
+
+def _looks_like_x_handle(text: str) -> bool:
+    """Return True when the text looks like a valid X handle."""
+    return bool(HANDLE_RE.fullmatch(text.strip()))
+
+
+def _matches_pending_input(action_type: str | None, text: str) -> bool:
+    """Return True when text matches the expected shape for a pending action."""
+    if action_type in {"raid_proof", "xpost", "xverify"}:
+        return bool(parse_x_post_url(text))
+    if action_type == "xlink_handle":
+        return _looks_like_x_handle(text)
+    return False
+
+
+def _log_pending_event(
+    event: str,
+    action_type: str | None,
+    user_id: int | None,
+    expected_chat_id: int | None,
+) -> None:
+    """Log a pending-action state transition without user content."""
+    logger.info(
+        "Campaign pending %s action=%s telegram_id=%s expected_chat_id=%s",
+        event,
+        action_type,
+        user_id,
+        expected_chat_id,
+    )
 
 
 def _utc_now() -> datetime:
@@ -355,9 +402,12 @@ async def _send_campaign_leaderboard(
         await schedule_delete(reply, context, 60)
 
 
-def _set_pending(context: ContextTypes.DEFAULT_TYPE, payload: dict) -> None:
+def _set_pending(context: ContextTypes.DEFAULT_TYPE, payload: dict) -> dict:
     """Store the next guided campaign action for the user."""
-    context.user_data[PENDING_ACTION_KEY] = payload
+    record = dict(payload)
+    record.setdefault("created_at", _now_ts())
+    context.user_data[PENDING_ACTION_KEY] = record
+    return record
 
 
 def _clear_pending(context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -754,6 +804,28 @@ async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, 
         reply_markup=campaign_home_keyboard(),
     )
     return True
+
+
+async def campaign_cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Cancel a pending campaign action when invoked in the expected chat."""
+    if not update.effective_message:
+        return
+    pending = context.user_data.get(PENDING_ACTION_KEY)
+    if not pending:
+        return
+    expected_chat_id = pending.get("chat_id")
+    source_chat = update.effective_chat
+    if not source_chat or expected_chat_id is None or source_chat.id != expected_chat_id:
+        return
+    action_type = pending.get("type")
+    _clear_pending(context)
+    _log_pending_event(
+        "cancelled",
+        action_type,
+        update.effective_user.id if update.effective_user else None,
+        expected_chat_id,
+    )
+    await update.effective_message.reply_text("Cancelled.")
 
 
 # ---------------------------------------------------------------------------
@@ -1480,7 +1552,7 @@ async def xpost_review_callback(update: Update, context: ContextTypes.DEFAULT_TY
         return
 
     if action == "approve":
-        _set_pending(
+        payload = _set_pending(
             context,
             {
                 "type": "xpost_award_xp",
@@ -1488,6 +1560,12 @@ async def xpost_review_callback(update: Update, context: ContextTypes.DEFAULT_TY
                 "chat_id": query.message.chat_id,
                 "review_message_id": query.message.message_id,
             },
+        )
+        _log_pending_event(
+            "set",
+            payload.get("type"),
+            query.from_user.id if query.from_user else None,
+            payload.get("chat_id"),
         )
         await query.answer("Send the XP amount.")
         await query.message.reply_text(
@@ -1652,7 +1730,15 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
     data = query.data
 
     if data == "campaign_cancel":
+        pending = context.user_data.get(PENDING_ACTION_KEY)
         _clear_pending(context)
+        if pending:
+            _log_pending_event(
+                "cancelled",
+                pending.get("type"),
+                query.from_user.id if query.from_user else None,
+                pending.get("chat_id"),
+            )
         reply = await query.message.reply_text("Cancelled.", reply_markup=campaign_home_keyboard())
         await schedule_delete(reply, context, 60)
         return
@@ -1740,7 +1826,16 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
     if data == "campaign_xlink_start":
         prompt = "Send your X handle now, like <code>@yourhandle</code>."
         if query.message.chat.type in ("group", "supergroup") and is_community_group_chat(query.message.chat_id):
-            _set_pending(context, {"type": "xlink_handle", "chat_id": query.from_user.id})
+            payload = _set_pending(
+                context,
+                {"type": "xlink_handle", "chat_id": query.from_user.id},
+            )
+            _log_pending_event(
+                "set",
+                payload.get("type"),
+                query.from_user.id if query.from_user else None,
+                payload.get("chat_id"),
+            )
             try:
                 await context.bot.send_message(
                     query.from_user.id,
@@ -1754,7 +1849,16 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
                 return
             await send_dm_redirect_status(update, context, dm_sent=True)
         else:
-            _set_pending(context, {"type": "xlink_handle", "chat_id": query.message.chat_id})
+            payload = _set_pending(
+                context,
+                {"type": "xlink_handle", "chat_id": query.message.chat_id},
+            )
+            _log_pending_event(
+                "set",
+                payload.get("type"),
+                query.from_user.id if query.from_user else None,
+                payload.get("chat_id"),
+            )
             reply = await query.message.reply_text(
                 prompt,
                 parse_mode="HTML",
@@ -1766,7 +1870,16 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
     if data == "campaign_xverify_start":
         prompt = "Send the X post URL that contains your verification code."
         if query.message.chat.type in ("group", "supergroup") and is_community_group_chat(query.message.chat_id):
-            _set_pending(context, {"type": "xverify", "chat_id": query.from_user.id})
+            payload = _set_pending(
+                context,
+                {"type": "xverify", "chat_id": query.from_user.id},
+            )
+            _log_pending_event(
+                "set",
+                payload.get("type"),
+                query.from_user.id if query.from_user else None,
+                payload.get("chat_id"),
+            )
             try:
                 await context.bot.send_message(
                     query.from_user.id,
@@ -1779,7 +1892,16 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
                 return
             await send_dm_redirect_status(update, context, dm_sent=True)
         else:
-            _set_pending(context, {"type": "xverify", "chat_id": query.message.chat_id})
+            payload = _set_pending(
+                context,
+                {"type": "xverify", "chat_id": query.message.chat_id},
+            )
+            _log_pending_event(
+                "set",
+                payload.get("type"),
+                query.from_user.id if query.from_user else None,
+                payload.get("chat_id"),
+            )
             reply = await query.message.reply_text(
                 prompt,
                 reply_markup=campaign_cancel_keyboard(),
@@ -1790,7 +1912,16 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
     if data == "campaign_xpost_start":
         prompt = "Send your HostFi-related X post URL. Admins will review it before XP is awarded."
         if query.message.chat.type in ("group", "supergroup") and is_community_group_chat(query.message.chat_id):
-            _set_pending(context, {"type": "xpost", "chat_id": query.from_user.id})
+            payload = _set_pending(
+                context,
+                {"type": "xpost", "chat_id": query.from_user.id},
+            )
+            _log_pending_event(
+                "set",
+                payload.get("type"),
+                query.from_user.id if query.from_user else None,
+                payload.get("chat_id"),
+            )
             try:
                 await context.bot.send_message(
                     query.from_user.id,
@@ -1803,7 +1934,16 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
                 return
             await send_dm_redirect_status(update, context, dm_sent=True)
         else:
-            _set_pending(context, {"type": "xpost", "chat_id": query.message.chat_id})
+            payload = _set_pending(
+                context,
+                {"type": "xpost", "chat_id": query.message.chat_id},
+            )
+            _log_pending_event(
+                "set",
+                payload.get("type"),
+                query.from_user.id if query.from_user else None,
+                payload.get("chat_id"),
+            )
             reply = await query.message.reply_text(
                 prompt,
                 reply_markup=campaign_cancel_keyboard(),
@@ -1819,7 +1959,16 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
             return
         prompt = f"Send your X proof URL for <b>Raid #{raid_id}</b>."
         if query.message.chat.type in ("group", "supergroup") and is_community_group_chat(query.message.chat_id):
-            _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.from_user.id})
+            payload = _set_pending(
+                context,
+                {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.from_user.id},
+            )
+            _log_pending_event(
+                "set",
+                payload.get("type"),
+                query.from_user.id if query.from_user else None,
+                payload.get("chat_id"),
+            )
             try:
                 await context.bot.send_message(
                     query.from_user.id,
@@ -1833,7 +1982,16 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
                 return
             await send_dm_redirect_status(update, context, dm_sent=True)
         else:
-            _set_pending(context, {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.message.chat_id})
+            payload = _set_pending(
+                context,
+                {"type": "raid_proof", "raid_id": raid_id, "chat_id": query.message.chat_id},
+            )
+            _log_pending_event(
+                "set",
+                payload.get("type"),
+                query.from_user.id if query.from_user else None,
+                payload.get("chat_id"),
+            )
             reply = await query.message.reply_text(
                 prompt,
                 parse_mode="HTML",
@@ -1870,45 +2028,48 @@ async def raid_submit_info_callback(update: Update, context: ContextTypes.DEFAUL
 
 async def campaign_guided_input_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Consume the next message for a pending campaign button flow."""
-    pending = context.user_data.get(PENDING_ACTION_KEY)
-    if not pending:
-        return
     if not update.effective_message or not update.effective_message.text:
         return
 
     text = update.effective_message.text.strip()
+    pending = context.user_data.get(PENDING_ACTION_KEY)
+    if not pending:
+        return
+
     action_type = pending.get("type")
     expected_chat_id = pending.get("chat_id")
     source_chat = update.effective_chat
+    user_id = update.effective_user.id if update.effective_user else None
+
+    if _pending_is_expired(pending):
+        _clear_pending(context)
+        _log_pending_event("expired", action_type, user_id, expected_chat_id)
+        if source_chat and source_chat.type == "private":
+            await update.effective_message.reply_text(
+                "That action expired. Tap the button again to restart."
+            )
+        return
+
     if expected_chat_id and source_chat and source_chat.id != expected_chat_id:
-        if (
-            action_type in {"raid_proof", "xpost", "xverify", "xlink_handle"}
-            and source_chat.type in ("group", "supergroup")
-            and is_community_group_chat(source_chat.id)
-        ):
-            user_id = update.effective_user.id if update.effective_user else None
-            logger.info(
-                "Campaign pending input sent in wrong chat action=%s telegram_id=%s source_chat_id=%s expected_chat_id=%s",
-                action_type,
-                user_id,
-                source_chat.id,
-                expected_chat_id,
-            )
-            notice = await update.effective_message.reply_text(
-                "This step happens in DM. Check your private chat with the bot."
-            )
-            await schedule_any_delete(notice, context, 30)
-            try:
-                await update.effective_message.delete()
-            except Exception as exc:
-                logger.warning(
-                    "Could not delete wrong-chat campaign input action=%s telegram_id=%s chat_id=%s: %s",
-                    action_type,
-                    user_id,
-                    source_chat.id,
-                    exc,
+        if source_chat.type in ("group", "supergroup") and is_community_group_chat(source_chat.id):
+            if _matches_pending_input(action_type, text):
+                _log_pending_event("wrong_chat_intercept", action_type, user_id, expected_chat_id)
+                notice = await update.effective_message.reply_text(
+                    "This step happens in DM. Check your private chat with the bot."
                 )
-            raise ApplicationHandlerStop
+                await schedule_any_delete(notice, context, 30)
+                try:
+                    await update.effective_message.delete()
+                except Exception as exc:
+                    logger.warning(
+                        "Could not delete wrong-chat campaign input action=%s telegram_id=%s chat_id=%s: %s",
+                        action_type,
+                        user_id,
+                        source_chat.id,
+                        exc,
+                    )
+                raise ApplicationHandlerStop
+            _log_pending_event("wrong_chat_ignore", action_type, user_id, expected_chat_id)
         return
 
     success = False
@@ -1929,7 +2090,9 @@ async def campaign_guided_input_handler(update: Update, context: ContextTypes.DE
 
     if success:
         _clear_pending(context)
+        _log_pending_event("consumed", action_type, user_id, expected_chat_id)
     else:
+        _log_pending_event("failed_keep_active", action_type, user_id, expected_chat_id)
         await update.effective_message.reply_text(
             "Send another value to retry, or tap Cancel.",
             reply_markup=campaign_cancel_keyboard(),
