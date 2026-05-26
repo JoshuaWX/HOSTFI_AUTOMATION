@@ -110,7 +110,7 @@ async def new_member_handler(
     chat_id = update.effective_chat.id
     from bot.handlers.campaign import record_new_member_invite
 
-    await record_new_member_invite(update)
+    await record_new_member_invite(update, context)
 
     for member in update.message.new_chat_members:
         if member.is_bot:

@@ -5,6 +5,7 @@ Author: HOSTFI Bot Team
 """
 
 import html
+import hashlib
 import logging
 import re
 import secrets
@@ -188,6 +189,36 @@ def _safe_url_preview(url: str | None) -> str | None:
     if not url:
         return None
     return url[:96]
+
+
+def _invite_link_ref(invite_link: str | None) -> str | None:
+    """Return a non-sensitive invite link reference for logs/admin diagnostics."""
+    if not invite_link:
+        return None
+    digest = hashlib.sha256(invite_link.encode("utf-8")).hexdigest()[:12]
+    return f"sha256:{digest}"
+
+
+def _log_invite_attribution(
+    result: dict,
+    *,
+    chat_id: int | None,
+    invitee_telegram_id: int | None,
+    invite_link: str | None,
+) -> None:
+    """Log a safe, reason-coded invite attribution result."""
+    status = result.get("status")
+    level = logging.WARNING if status in {"missing_invite_link", "unknown_invite_link", "db_error"} else logging.INFO
+    logger.log(
+        level,
+        "Invite attribution status=%s chat_id=%s invitee_telegram_id=%s cycle_id=%s inviter_telegram_id=%s invite_link_ref=%s",
+        status,
+        chat_id,
+        invitee_telegram_id,
+        result.get("cycle_id"),
+        result.get("inviter_telegram_id"),
+        _invite_link_ref(invite_link),
+    )
 
 
 def _log_raid_proof_rejection(
@@ -1006,20 +1037,21 @@ async def invites_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         await schedule_delete(reply, context, 60)
         return
 
-    text = "\n".join(
-        [
-            title(target_label, "👥"),
-            "",
-            field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>"),
-            field("Pending", f"<b>{stats.get('pending', 0)}</b>"),
-            field("Confirmed", f"<b>{stats.get('awarded', 0)}</b>"),
-            field("Ineligible", f"<b>{stats.get('ineligible', 0)}</b>"),
-            field("Invite XP", f"<b>{stats.get('invite_xp', 0):,}</b>"),
-            field("Retention", f"<b>{_retention_label()}</b>"),
-            "",
-            f"<code>{html.escape(link or stats.get('invite_link') or '')}</code>",
-        ]
-    )
+    total_joins = int(stats.get("pending", 0)) + int(stats.get("awarded", 0)) + int(stats.get("ineligible", 0))
+    lines = [
+        title(target_label, "👥"),
+        "",
+        field("Cycle", f"<b>#{cycle.get('cycle_number')}</b>"),
+        field("Pending", f"<b>{stats.get('pending', 0)}</b>"),
+        field("Confirmed", f"<b>{stats.get('awarded', 0)}</b>"),
+        field("Ineligible", f"<b>{stats.get('ineligible', 0)}</b>"),
+        field("Invite XP", f"<b>{stats.get('invite_xp', 0):,}</b>"),
+        field("Retention", f"<b>{_retention_label()}</b>"),
+    ]
+    if total_joins == 0:
+        lines.extend(["", "No joins have been recorded from this campaign link yet."])
+    lines.extend(["", f"<code>{html.escape(link or stats.get('invite_link') or '')}</code>"])
+    text = "\n".join(lines)
     if _is_community_group_update(update):
         try:
             await context.bot.send_message(
@@ -2061,17 +2093,46 @@ async def process_invite_awards(bot) -> int:
         inviter = int(join["inviter_telegram_id"])
         if not active_cycle or int(active_cycle["id"]) != int(join["cycle_id"]):
             await mark_invite_join(join["id"], "ineligible")
+            logger.info(
+                "Invite award skipped reason=cycle_inactive_or_mismatch join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s",
+                join.get("id"),
+                join.get("cycle_id"),
+                inviter,
+                invitee,
+            )
             continue
         if await is_disqualified(inviter, int(join["cycle_id"])):
             await mark_invite_join(join["id"], "ineligible")
+            logger.info(
+                "Invite award skipped reason=inviter_disqualified join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s",
+                join.get("id"),
+                join.get("cycle_id"),
+                inviter,
+                invitee,
+            )
             continue
         try:
             member = await bot.get_chat_member(int(join.get("chat_id") or get_invite_target_group_id()), invitee)
             if member.status in ("left", "kicked"):
                 await mark_invite_join(join["id"], "ineligible")
+                logger.info(
+                    "Invite award skipped reason=invitee_left join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s member_status=%s",
+                    join.get("id"),
+                    join.get("cycle_id"),
+                    inviter,
+                    invitee,
+                    member.status,
+                )
                 continue
         except Exception as exc:
-            logger.warning("Invite retention check failed for %s: %s", invitee, exc)
+            logger.warning(
+                "Invite award skipped reason=membership_check_failed join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s error=%s",
+                join.get("id"),
+                join.get("cycle_id"),
+                inviter,
+                invitee,
+                exc,
+            )
             continue
 
         event = await award_xp(
@@ -2086,6 +2147,14 @@ async def process_invite_awards(bot) -> int:
         if event:
             await mark_invite_join(join["id"], "awarded", awarded=True)
             awarded += 1
+            logger.info(
+                "Invite award credited join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s amount=%s",
+                join.get("id"),
+                join.get("cycle_id"),
+                inviter,
+                invitee,
+                XP_INVITE,
+            )
             try:
                 await bot.send_message(
                     inviter,
@@ -2094,6 +2163,14 @@ async def process_invite_awards(bot) -> int:
                 )
             except Exception:
                 pass
+        else:
+            logger.warning(
+                "Invite award failed reason=xp_award_failed join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s",
+                join.get("id"),
+                join.get("cycle_id"),
+                inviter,
+                invitee,
+            )
     return awarded
 
 
@@ -2122,15 +2199,39 @@ async def process_expired_raids(bot) -> int:
     return closed
 
 
-async def record_new_member_invite(update: Update) -> None:
+async def record_new_member_invite(update: Update, context: ContextTypes.DEFAULT_TYPE | None = None) -> None:
     """Record campaign invite attribution from a new member service message."""
     if not update.message or not update.message.new_chat_members:
         return
     invite = getattr(update.message, "invite_link", None)
     invite_link = getattr(invite, "invite_link", None)
-    if not invite_link:
-        return
+    chat_id = update.effective_chat.id if update.effective_chat else None
     for member in update.message.new_chat_members:
-        if member.is_bot:
-            continue
-        await record_invite_join(invite_link, member.id)
+        result = await record_invite_join(
+            invite_link,
+            member.id,
+            invitee_is_bot=bool(member.is_bot),
+        )
+        _log_invite_attribution(
+            result,
+            chat_id=chat_id,
+            invitee_telegram_id=member.id,
+            invite_link=invite_link,
+        )
+        if result.get("status") == "unknown_invite_link" and context and ADMIN_CHANNEL_ID:
+            link_ref = html.escape(_invite_link_ref(invite_link) or "none")
+            try:
+                await context.bot.send_message(
+                    chat_id=ADMIN_CHANNEL_ID,
+                    text=(
+                        f"{title('Invite Attribution Skipped', '⚠️')}\n\n"
+                        "A new member joined through an invite link that is not tracked for the active campaign.\n\n"
+                        f"{field('Reason', '<b>Untracked invite link</b>')}\n"
+                        f"{field('Chat', f'<code>{chat_id}</code>')}\n"
+                        f"{field('Invitee', f'<code>{member.id}</code>')}\n"
+                        f"{field('Link ref', f'<code>{link_ref}</code>')}"
+                    ),
+                    parse_mode="HTML",
+                )
+            except Exception as exc:
+                logger.warning("Could not send invite attribution warning: %s", exc)

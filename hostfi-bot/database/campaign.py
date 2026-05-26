@@ -448,10 +448,20 @@ async def get_or_create_invite_link_record(
         return None
 
 
-async def record_invite_join(invite_link: str, invitee_telegram_id: int) -> dict | None:
+async def record_invite_join(
+    invite_link: str | None,
+    invitee_telegram_id: int,
+    *,
+    invitee_is_bot: bool = False,
+) -> dict:
     """Record a new member joining through a campaign invite link."""
 
-    def _op() -> dict | None:
+    def _op() -> dict:
+        if invitee_is_bot:
+            return {"status": "bot_invitee", "record": None}
+        if not invite_link:
+            return {"status": "missing_invite_link", "record": None}
+
         client = get_supabase_client()
         link = (
             client.table("campaign_invite_links")
@@ -461,10 +471,16 @@ async def record_invite_join(invite_link: str, invitee_telegram_id: int) -> dict
             .execute()
         )
         if not link.data:
-            return None
+            return {"status": "unknown_invite_link", "record": None}
         link_row = link.data[0]
         if int(link_row["inviter_telegram_id"]) == int(invitee_telegram_id):
-            return None
+            return {
+                "status": "self_invite",
+                "record": None,
+                "cycle_id": link_row.get("cycle_id"),
+                "inviter_telegram_id": link_row.get("inviter_telegram_id"),
+                "chat_id": link_row.get("chat_id"),
+            }
 
         existing_query = (
             client.table("campaign_invite_joins")
@@ -478,7 +494,13 @@ async def record_invite_join(invite_link: str, invitee_telegram_id: int) -> dict
             existing_query = existing_query.eq("chat_id", link_row.get("chat_id"))
         existing = existing_query.limit(1).execute()
         if existing.data:
-            return existing.data[0]
+            return {
+                "status": "already_recorded",
+                "record": existing.data[0],
+                "cycle_id": link_row.get("cycle_id"),
+                "inviter_telegram_id": link_row.get("inviter_telegram_id"),
+                "chat_id": link_row.get("chat_id"),
+            }
 
         joined_at = _now()
         eligible_at = joined_at + timedelta(hours=INVITE_RETENTION_HOURS)
@@ -498,13 +520,27 @@ async def record_invite_join(invite_link: str, invitee_telegram_id: int) -> dict
             )
             .execute()
         )
-        return created.data[0] if created.data else None
+        if not created.data:
+            return {
+                "status": "db_error",
+                "record": None,
+                "cycle_id": link_row.get("cycle_id"),
+                "inviter_telegram_id": link_row.get("inviter_telegram_id"),
+                "chat_id": link_row.get("chat_id"),
+            }
+        return {
+            "status": "recorded",
+            "record": created.data[0],
+            "cycle_id": link_row.get("cycle_id"),
+            "inviter_telegram_id": link_row.get("inviter_telegram_id"),
+            "chat_id": link_row.get("chat_id"),
+        }
 
     try:
         return await asyncio.to_thread(_op)
     except Exception as exc:
         logger.error("Failed to record invite join: %s", exc)
-        return None
+        return {"status": "db_error", "record": None, "error": str(exc)}
 
 
 async def get_pending_invite_joins() -> list[dict]:
