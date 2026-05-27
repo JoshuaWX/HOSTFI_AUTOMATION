@@ -450,7 +450,7 @@ async def _send_campaign_leaderboard(
             await schedule_delete(reply, context, 60)
         return
 
-    lines = [title("XP Leaderboard", "🏅"), ""]
+    lines = [title("XP Leaderboard · Top 10", "🏅"), ""]
     for index, row in enumerate(top_users, 1):
         lines.append(f"{index}. <b>{_display_user(row)}</b> — {row.get('xp', 0):,} XP")
     lines.append("")

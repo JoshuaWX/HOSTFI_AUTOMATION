@@ -32,6 +32,9 @@ from database.users import (
 
 logger = logging.getLogger(__name__)
 
+DEFAULT_LEADERBOARD_LIMIT = 10
+MAX_LEADERBOARD_LIMIT = 50
+
 
 def _start_dashboard_text() -> str:
     """Build the private start/dashboard text."""
@@ -207,7 +210,7 @@ async def leaderboard_command(
     update: Update, context: ContextTypes.DEFAULT_TYPE
 ) -> None:
     """
-    Handle /leaderboard — show top 10 members by XP.
+    Handle /leaderboard — show campaign members by XP.
 
     Args:
         update: Incoming Telegram update
@@ -226,7 +229,33 @@ async def leaderboard_command(
             await schedule_any_delete(msg, context, 15)
             return
 
-        top_users = await get_campaign_leaderboard(10)
+        limit = DEFAULT_LEADERBOARD_LIMIT
+        if context.args:
+            if len(context.args) != 1 or not context.args[0].isdigit():
+                msg = await update.effective_message.reply_text(
+                    status_text(
+                        "warning",
+                        f"Usage: <code>/leaderboard</code> or <code>/leaderboard 20</code>. Maximum is {MAX_LEADERBOARD_LIMIT}.",
+                    ),
+                    parse_mode="HTML",
+                )
+                await schedule_any_delete(msg, context, 15)
+                await schedule_command_delete(update, context, 15)
+                return
+            limit = int(context.args[0])
+            if limit < 1 or limit > MAX_LEADERBOARD_LIMIT:
+                msg = await update.effective_message.reply_text(
+                    status_text(
+                        "warning",
+                        f"Choose a leaderboard number between 1 and {MAX_LEADERBOARD_LIMIT}.",
+                    ),
+                    parse_mode="HTML",
+                )
+                await schedule_any_delete(msg, context, 15)
+                await schedule_command_delete(update, context, 15)
+                return
+
+        top_users = await get_campaign_leaderboard(limit)
 
         if not top_users:
             msg = await update.effective_message.reply_text(
@@ -235,7 +264,7 @@ async def leaderboard_command(
             await schedule_delete(msg, context, 90)
             return
 
-        lines: list[str] = [title("XP Leaderboard", "🏅"), ""]
+        lines: list[str] = [title(f"XP Leaderboard · Top {limit}", "🏅"), ""]
 
         for i, user in enumerate(top_users):
             prefix = f"{i + 1}."
