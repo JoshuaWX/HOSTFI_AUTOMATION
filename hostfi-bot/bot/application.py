@@ -11,6 +11,7 @@ from telegram import Update
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
+    ChatMemberHandler,
     CommandHandler,
     ConversationHandler,
     MessageHandler,
@@ -376,8 +377,16 @@ def _register_message_handlers(app: Application) -> None:
         left_member_handler,
         new_member_handler,
     )
-    from bot.handlers.campaign import campaign_guided_input_handler
+    from bot.handlers.campaign import campaign_guided_input_handler, chat_member_invite_handler
     from bot.handlers.tickets import support_pending_dm_handler
+
+    # Chat member updates carry invite-link attribution more reliably than service messages.
+    app.add_handler(
+        ChatMemberHandler(
+            chat_member_invite_handler,
+            ChatMemberHandler.CHAT_MEMBER,
+        )
+    )
 
     # New member join events
     app.add_handler(

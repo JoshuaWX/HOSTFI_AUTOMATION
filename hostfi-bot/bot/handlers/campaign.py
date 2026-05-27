@@ -202,6 +202,7 @@ def _invite_link_ref(invite_link: str | None) -> str | None:
 def _log_invite_attribution(
     result: dict,
     *,
+    source: str,
     chat_id: int | None,
     invitee_telegram_id: int | None,
     invite_link: str | None,
@@ -211,7 +212,8 @@ def _log_invite_attribution(
     level = logging.WARNING if status in {"missing_invite_link", "unknown_invite_link", "db_error"} else logging.INFO
     logger.log(
         level,
-        "Invite attribution status=%s chat_id=%s invitee_telegram_id=%s cycle_id=%s inviter_telegram_id=%s invite_link_ref=%s",
+        "Invite attribution source=%s status=%s chat_id=%s invitee_telegram_id=%s cycle_id=%s inviter_telegram_id=%s invite_link_ref=%s",
+        source,
         status,
         chat_id,
         invitee_telegram_id,
@@ -219,6 +221,34 @@ def _log_invite_attribution(
         result.get("inviter_telegram_id"),
         _invite_link_ref(invite_link),
     )
+
+
+async def _send_invite_attribution_warning(
+    context: ContextTypes.DEFAULT_TYPE | None,
+    *,
+    chat_id: int | None,
+    invitee_telegram_id: int,
+    invite_link: str | None,
+) -> None:
+    """Send an admin-safe warning for untracked campaign invite links."""
+    if not context or not ADMIN_CHANNEL_ID:
+        return
+    link_ref = html.escape(_invite_link_ref(invite_link) or "none")
+    try:
+        await context.bot.send_message(
+            chat_id=ADMIN_CHANNEL_ID,
+            text=(
+                f"{title('Invite Attribution Skipped', '⚠️')}\n\n"
+                "A new member joined through an invite link that is not tracked for the active campaign.\n\n"
+                f"{field('Reason', '<b>Untracked invite link</b>')}\n"
+                f"{field('Chat', f'<code>{chat_id}</code>')}\n"
+                f"{field('Invitee', f'<code>{invitee_telegram_id}</code>')}\n"
+                f"{field('Link ref', f'<code>{link_ref}</code>')}"
+            ),
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.warning("Could not send invite attribution warning: %s", exc)
 
 
 def _log_raid_proof_rejection(
@@ -2214,24 +2244,52 @@ async def record_new_member_invite(update: Update, context: ContextTypes.DEFAULT
         )
         _log_invite_attribution(
             result,
+            source="new_chat_members",
             chat_id=chat_id,
             invitee_telegram_id=member.id,
             invite_link=invite_link,
         )
-        if result.get("status") == "unknown_invite_link" and context and ADMIN_CHANNEL_ID:
-            link_ref = html.escape(_invite_link_ref(invite_link) or "none")
-            try:
-                await context.bot.send_message(
-                    chat_id=ADMIN_CHANNEL_ID,
-                    text=(
-                        f"{title('Invite Attribution Skipped', '⚠️')}\n\n"
-                        "A new member joined through an invite link that is not tracked for the active campaign.\n\n"
-                        f"{field('Reason', '<b>Untracked invite link</b>')}\n"
-                        f"{field('Chat', f'<code>{chat_id}</code>')}\n"
-                        f"{field('Invitee', f'<code>{member.id}</code>')}\n"
-                        f"{field('Link ref', f'<code>{link_ref}</code>')}"
-                    ),
-                    parse_mode="HTML",
-                )
-            except Exception as exc:
-                logger.warning("Could not send invite attribution warning: %s", exc)
+        if result.get("status") == "unknown_invite_link":
+            await _send_invite_attribution_warning(
+                context,
+                chat_id=chat_id,
+                invitee_telegram_id=member.id,
+                invite_link=invite_link,
+            )
+
+
+async def chat_member_invite_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Record campaign invite attribution from Telegram chat_member updates."""
+    event = update.chat_member
+    if not event:
+        return
+
+    old_status = getattr(event.old_chat_member, "status", None)
+    new_status = getattr(event.new_chat_member, "status", None)
+    if old_status not in {"left", "kicked"} or new_status not in {"member", "restricted"}:
+        return
+
+    user = event.new_chat_member.user
+    invite = getattr(event, "invite_link", None)
+    invite_link = getattr(invite, "invite_link", None)
+    chat_id = event.chat.id if event.chat else None
+
+    result = await record_invite_join(
+        invite_link,
+        user.id,
+        invitee_is_bot=bool(user.is_bot),
+    )
+    _log_invite_attribution(
+        result,
+        source="chat_member",
+        chat_id=chat_id,
+        invitee_telegram_id=user.id,
+        invite_link=invite_link,
+    )
+    if result.get("status") == "unknown_invite_link":
+        await _send_invite_attribution_warning(
+            context,
+            chat_id=chat_id,
+            invitee_telegram_id=user.id,
+            invite_link=invite_link,
+        )
