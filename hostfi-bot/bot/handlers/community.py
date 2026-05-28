@@ -271,6 +271,7 @@ async def verification_callback(
                 parse_mode="HTML",
                 reply_markup=welcome_keyboard(),
             )
+            await schedule_any_delete(query.message, context, 15)
             await query.answer("Verified.")
 
             logger.info("User %s verified successfully", target_user_id)
@@ -336,7 +337,7 @@ async def _verification_timeout(
 
             # Edit the original CAPTCHA message
             try:
-                await context.bot.edit_message_text(
+                edited = await context.bot.edit_message_text(
                     chat_id=chat_id,
                     message_id=message_id,
                     text=(
@@ -345,6 +346,8 @@ async def _verification_timeout(
                     ),
                     parse_mode="HTML",
                 )
+                if edited and hasattr(edited, "chat"):
+                    await schedule_any_delete(edited, context, 15)
             except Exception:
                 pass  # Message may have been deleted already
 
