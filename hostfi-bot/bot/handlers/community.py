@@ -39,6 +39,7 @@ from bot.utils.permissions import get_admin_ids, is_admin, is_admin_channel_chat
 from bot.utils.rate_limiter import check_rate_limit, get_redis
 from config import ADMIN_CHANNEL_ID, MAX_MESSAGES_PER_MINUTE, is_community_group_chat
 from database.logs import log_action
+from database.campaign import mark_invite_join_active, mark_invite_join_verified
 from database.users import get_or_create_user, is_user_verified, verify_user
 
 logger = logging.getLogger(__name__)
@@ -250,6 +251,14 @@ async def verification_callback(
                 permissions=MEMBER_PERMISSIONS,
             )
             await verify_user(target_user_id)
+            marked = await mark_invite_join_verified(target_user_id, chat_id)
+            if marked:
+                logger.info(
+                    "Invite eligibility marked verified invitee_telegram_id=%s chat_id=%s joins=%s",
+                    target_user_id,
+                    chat_id,
+                    marked,
+                )
             if redis is not None:
                 await redis.delete(captcha_key)
             else:
@@ -538,6 +547,16 @@ async def group_message_filter(
                 "Failed to delete spam from %s: %s", user.id, exc
             )
         return
+
+    if verified:
+        marked = await mark_invite_join_active(user.id, chat_id)
+        if marked:
+            logger.info(
+                "Invite eligibility marked active invitee_telegram_id=%s chat_id=%s joins=%s",
+                user.id,
+                chat_id,
+                marked,
+            )
 
     # General chatting intentionally earns no campaign XP.
 

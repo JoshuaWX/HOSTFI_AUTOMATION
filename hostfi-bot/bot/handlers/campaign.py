@@ -2141,6 +2141,48 @@ async def process_invite_awards(bot) -> int:
                 invitee,
             )
             continue
+
+        invitee_user = await get_user(invitee)
+        cycle_start = _parse_iso(active_cycle.get("start_at")) if active_cycle else None
+        invitee_join_date = _parse_iso(invitee_user.get("join_date")) if invitee_user else None
+        if invitee_user and cycle_start and invitee_join_date and invitee_join_date < cycle_start:
+            await mark_invite_join(join["id"], "ineligible")
+            logger.info(
+                "Invite award skipped reason=invitee_existing_user join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s invitee_join_date=%s cycle_start=%s",
+                join.get("id"),
+                join.get("cycle_id"),
+                inviter,
+                invitee,
+                invitee_user.get("join_date"),
+                active_cycle.get("start_at"),
+            )
+            continue
+
+        metadata = join.get("metadata") or {}
+        if not invitee_user or not invitee_user.get("is_verified") or not metadata.get("invitee_verified_at"):
+            await mark_invite_join(join["id"], "ineligible")
+            logger.info(
+                "Invite award skipped reason=invitee_not_verified join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s db_verified=%s metadata_verified=%s",
+                join.get("id"),
+                join.get("cycle_id"),
+                inviter,
+                invitee,
+                bool(invitee_user and invitee_user.get("is_verified")),
+                bool(metadata.get("invitee_verified_at")),
+            )
+            continue
+
+        if not metadata.get("invitee_first_active_at"):
+            await mark_invite_join(join["id"], "ineligible")
+            logger.info(
+                "Invite award skipped reason=invitee_not_active join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s",
+                join.get("id"),
+                join.get("cycle_id"),
+                inviter,
+                invitee,
+            )
+            continue
+
         try:
             member = await bot.get_chat_member(int(join.get("chat_id") or get_invite_target_group_id()), invitee)
             if member.status in ("left", "kicked"):
@@ -2178,7 +2220,7 @@ async def process_invite_awards(bot) -> int:
             await mark_invite_join(join["id"], "awarded", awarded=True)
             awarded += 1
             logger.info(
-                "Invite award credited join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s amount=%s",
+                "Invite award credited reason=invite_awarded join_id=%s cycle_id=%s inviter_telegram_id=%s invitee_telegram_id=%s amount=%s",
                 join.get("id"),
                 join.get("cycle_id"),
                 inviter,

@@ -580,6 +580,70 @@ async def mark_invite_join(join_id: int, status: str, awarded: bool = False) -> 
         logger.error("Failed to mark invite join %s: %s", join_id, exc)
 
 
+async def mark_invite_join_metadata(
+    invitee_telegram_id: int,
+    chat_id: int | None,
+    marker: str,
+) -> int:
+    """Mark metadata on a pending invite join for an invitee in the active cycle."""
+
+    def _op() -> int:
+        client = get_supabase_client()
+        cycle = (
+            client.table("campaign_cycles")
+            .select("id")
+            .eq("status", "active")
+            .order("start_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not cycle.data:
+            return 0
+        query = (
+            client.table("campaign_invite_joins")
+            .select("id,metadata")
+            .eq("cycle_id", cycle.data[0]["id"])
+            .eq("invitee_telegram_id", invitee_telegram_id)
+            .eq("status", "pending")
+        )
+        if chat_id is None:
+            query = query.is_("chat_id", "null")
+        else:
+            query = query.eq("chat_id", chat_id)
+        result = query.execute()
+
+        updated = 0
+        for row in result.data or []:
+            metadata = dict(row.get("metadata") or {})
+            metadata.setdefault(marker, _iso(_now()))
+            client.table("campaign_invite_joins").update({"metadata": metadata}).eq(
+                "id", row["id"]
+            ).execute()
+            updated += 1
+        return updated
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error(
+            "Failed to mark invite join metadata invitee=%s marker=%s: %s",
+            invitee_telegram_id,
+            marker,
+            exc,
+        )
+        return 0
+
+
+async def mark_invite_join_verified(invitee_telegram_id: int, chat_id: int | None) -> int:
+    """Mark that an invitee passed the Telegram CAPTCHA."""
+    return await mark_invite_join_metadata(invitee_telegram_id, chat_id, "invitee_verified_at")
+
+
+async def mark_invite_join_active(invitee_telegram_id: int, chat_id: int | None) -> int:
+    """Mark that an invitee sent a clean non-command group message."""
+    return await mark_invite_join_metadata(invitee_telegram_id, chat_id, "invitee_first_active_at")
+
+
 async def get_invite_stats(telegram_id: int, cycle_id: int | None = None) -> dict | None:
     """Return invite counts and XP earned for a user in the active/current cycle."""
 
