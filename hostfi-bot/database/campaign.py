@@ -14,8 +14,8 @@ from database.client import get_supabase_client
 
 logger = logging.getLogger(__name__)
 
-XP_INVITE = 20
-XP_RAID = 50
+XP_INVITE = 30
+XP_RAID = 100
 XP_X_POST = 150
 XP_HELPFUL = 100
 

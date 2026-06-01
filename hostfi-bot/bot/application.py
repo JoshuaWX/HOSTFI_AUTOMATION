@@ -84,6 +84,15 @@ def _register_group_guard(app: Application) -> None:
         return variants
 
     async def _guard(update: Update, context):
+        user = update.effective_user
+        if user is not None and not user.is_bot:
+            try:
+                from database.users import get_or_create_user
+
+                await get_or_create_user(user.id, user.username, user.first_name)
+            except Exception as exc:
+                logger.warning("Failed to sync Telegram profile for %s: %s", user.id, exc)
+
         chat = update.effective_chat
         if chat is None:
             return

@@ -114,11 +114,19 @@ async def get_or_create_user(
         )
 
         if response.data:
-            # Touch last_active timestamp
-            client.table("users").update(
-                {"last_active": datetime.now(timezone.utc).isoformat()}
-            ).eq("telegram_id", telegram_id).execute()
-            return response.data[0]
+            safe_username = html.escape(username) if username else None
+            safe_first_name = html.escape(first_name) if first_name else None
+            payload = {
+                "username": safe_username,
+                "first_name": safe_first_name,
+                "last_active": datetime.now(timezone.utc).isoformat(),
+            }
+            client.table("users").update(payload).eq(
+                "telegram_id", telegram_id
+            ).execute()
+            updated = dict(response.data[0])
+            updated.update(payload)
+            return updated
 
         # Create new user — sanitise all string fields
         safe_username = html.escape(username) if username else None
