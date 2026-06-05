@@ -613,6 +613,7 @@ async def adminhelp_command(
                 "",
                 title("XP Campaign"),
                 bullet("<code>/cycle start|finish</code> — Manage cycles"),
+                bullet("<code>/referrals open|close|status</code> — Referral controls"),
                 bullet("<code>/raid create &lt;url&gt; [minutes]</code> — Create raid"),
                 bullet("<code>/invites @username</code> — Invite stats"),
                 bullet("Reply with <code>/award</code> — Award helpful message"),

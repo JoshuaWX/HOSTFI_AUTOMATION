@@ -57,9 +57,11 @@ from database.campaign import (
     close_raid,
     create_raid,
     create_x_verification,
+    deactivate_invite_links,
     delete_x_post_submission,
     finish_cycle,
     get_active_cycle,
+    get_active_invite_link_records,
     get_active_raids,
     get_campaign_leaderboard,
     get_campaign_rank,
@@ -80,6 +82,8 @@ from database.campaign import (
     record_raid_message,
     record_raid_submission,
     record_x_post_submission,
+    referrals_are_open,
+    set_referrals_open,
     start_cycle,
     verify_x_account,
 )
@@ -981,13 +985,20 @@ async def invite_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if not user_id or not update.effective_message:
         return
 
-    if not await check_rate_limit(user_id, "campaign_invite", 5, 300):
-        await update.effective_message.reply_text(status_text("warning", "Please wait before requesting another invite link."))
-        return
-
     cycle = await get_active_cycle()
     if not cycle:
         await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
+        return
+    if not referrals_are_open(cycle):
+        reply = await update.effective_message.reply_text(
+            status_text("warning", "Referrals are currently closed.")
+        )
+        await schedule_any_delete(reply, context, 60)
+        await schedule_command_delete(update, context, 30)
+        return
+
+    if not await check_rate_limit(user_id, "campaign_invite", 5, 300):
+        await update.effective_message.reply_text(status_text("warning", "Please wait before requesting another invite link."))
         return
 
     link, error = await _get_or_create_primary_invite_link(update, context, user_id, cycle)
@@ -1393,6 +1404,120 @@ async def cycle_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         return
 
     await update.effective_message.reply_text(status_text("error", "Unknown cycle action."))
+
+
+async def referrals_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Superadmin controls for campaign referral availability."""
+    if not update.effective_user or not update.effective_message:
+        return
+    if not await is_superadmin(update.effective_user.id):
+        await update.effective_message.reply_text(status_text("error", "Superadmin only."))
+        return
+
+    args = context.args or []
+    if not args or args[0].lower() not in {"status", "open", "close"}:
+        await update.effective_message.reply_text(
+            "Usage: <code>/referrals status</code>, <code>/referrals open</code>, or <code>/referrals close</code>",
+            parse_mode="HTML",
+        )
+        return
+
+    cycle = await get_active_cycle()
+    if not cycle:
+        await update.effective_message.reply_text(_campaign_missing(), parse_mode="HTML")
+        return
+
+    action = args[0].lower()
+    cycle_label = f"#{html.escape(str(cycle.get('cycle_number') or cycle.get('id')))}"
+    reward_config = cycle.get("reward_config") or {}
+    updated_at = reward_config.get("referrals_updated_at")
+    updated_by = reward_config.get("referrals_updated_by")
+
+    if action == "status":
+        state = "Open" if referrals_are_open(cycle) else "Closed"
+        lines = [
+            title("Referral Status", "👥"),
+            "",
+            field("Cycle", f"<b>{cycle_label}</b>"),
+            field("Status", f"<b>{state}</b>"),
+        ]
+        if updated_at:
+            lines.append(field("Updated", f"<b>{html.escape(str(updated_at))}</b>"))
+        if updated_by:
+            lines.append(field("Updated by", f"<code>{html.escape(str(updated_by))}</code>"))
+        await update.effective_message.reply_text("\n".join(lines), parse_mode="HTML")
+        return
+
+    if action == "open":
+        updated = await set_referrals_open(int(cycle["id"]), True, update.effective_user.id)
+        if not updated:
+            await update.effective_message.reply_text(status_text("error", "Could not open referrals."))
+            return
+        await update.effective_message.reply_text(
+            title("Referrals Open", "✅")
+            + f"\n\n{field('Cycle', f'<b>{cycle_label}</b>')}"
+            + "\nUsers can request fresh referral links again.",
+            parse_mode="HTML",
+        )
+        await log_action(
+            "referrals_opened",
+            update.effective_user.id,
+            reason="Campaign referrals opened",
+            metadata={"cycle_id": cycle["id"]},
+        )
+        return
+
+    active_links = await get_active_invite_link_records(int(cycle["id"]))
+    updated = await set_referrals_open(int(cycle["id"]), False, update.effective_user.id)
+    if not updated:
+        await update.effective_message.reply_text(status_text("error", "Could not close referrals."))
+        return
+
+    revoked = 0
+    revoke_failed = 0
+    for link in active_links:
+        invite_link = link.get("invite_link")
+        chat_id = link.get("chat_id") or get_invite_target_group_id()
+        if not invite_link or not chat_id:
+            continue
+        try:
+            await context.bot.revoke_chat_invite_link(
+                chat_id=int(chat_id),
+                invite_link=str(invite_link),
+            )
+            revoked += 1
+        except Exception as exc:
+            revoke_failed += 1
+            logger.warning(
+                "Failed to revoke campaign invite link id=%s cycle_id=%s chat_id=%s: %s",
+                link.get("id"),
+                cycle.get("id"),
+                chat_id,
+                exc,
+            )
+
+    deactivated = await deactivate_invite_links(int(cycle["id"]))
+    await update.effective_message.reply_text(
+        title("Referrals Closed", "✅")
+        + f"\n\n{field('Cycle', f'<b>{cycle_label}</b>')}"
+        + f"\n{field('Links deactivated', f'<b>{deactivated}</b>')}"
+        + f"\n{field('Telegram revokes', f'<b>{revoked}</b>')}"
+        + f"\n{field('Revoke failures', f'<b>{revoke_failed}</b>')}"
+        + "\n\nAlready-recorded pending invite joins can still mature if eligible.",
+        parse_mode="HTML",
+    )
+    await log_action(
+        "referrals_closed",
+        update.effective_user.id,
+        reason="Campaign referrals closed",
+        metadata={
+            "cycle_id": cycle["id"],
+            "active_links": len(active_links),
+            "deactivated": deactivated,
+            "revoked": revoked,
+            "revoke_failed": revoke_failed,
+        },
+    )
 
 
 async def award_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:

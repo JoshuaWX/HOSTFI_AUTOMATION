@@ -45,6 +45,17 @@ def _cycle_label(cycle: dict | None) -> str:
     return f"Cycle #{cycle.get('cycle_number', cycle.get('id'))}"
 
 
+def referrals_are_open(cycle: dict | None) -> bool:
+    """Return True when referrals are open for a cycle.
+
+    Older cycles do not have this reward_config key, so missing means open.
+    """
+    if not cycle:
+        return False
+    reward_config = cycle.get("reward_config") or {}
+    return bool(reward_config.get("referrals_open", True))
+
+
 async def get_active_cycle() -> dict | None:
     """Return the active campaign cycle, if one exists."""
 
@@ -65,6 +76,82 @@ async def get_active_cycle() -> dict | None:
     except Exception as exc:
         logger.error("Failed to get active campaign cycle: %s", exc)
         return None
+
+
+async def set_referrals_open(cycle_id: int, is_open: bool, actor_telegram_id: int) -> dict | None:
+    """Set referral open/closed state for a campaign cycle."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        current = (
+            client.table("campaign_cycles")
+            .select("*")
+            .eq("id", cycle_id)
+            .limit(1)
+            .execute()
+        )
+        if not current.data:
+            return None
+        cycle = current.data[0]
+        reward_config = dict(cycle.get("reward_config") or {})
+        reward_config["referrals_open"] = bool(is_open)
+        reward_config["referrals_updated_at"] = _iso(_now())
+        reward_config["referrals_updated_by"] = actor_telegram_id
+        updated = (
+            client.table("campaign_cycles")
+            .update({"reward_config": reward_config})
+            .eq("id", cycle_id)
+            .execute()
+        )
+        return updated.data[0] if updated.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to update referral state for cycle %s: %s", cycle_id, exc)
+        return None
+
+
+async def get_active_invite_link_records(cycle_id: int) -> list[dict]:
+    """Return active campaign invite links for a cycle."""
+
+    def _op() -> list[dict]:
+        client = get_supabase_client()
+        result = (
+            client.table("campaign_invite_links")
+            .select("*")
+            .eq("cycle_id", cycle_id)
+            .eq("is_active", True)
+            .execute()
+        )
+        return result.data or []
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to fetch active invite links for cycle %s: %s", cycle_id, exc)
+        return []
+
+
+async def deactivate_invite_links(cycle_id: int) -> int:
+    """Mark active campaign invite links inactive for a cycle."""
+
+    def _op() -> int:
+        client = get_supabase_client()
+        result = (
+            client.table("campaign_invite_links")
+            .update({"is_active": False})
+            .eq("cycle_id", cycle_id)
+            .eq("is_active", True)
+            .execute()
+        )
+        return len(result.data or [])
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to deactivate invite links for cycle %s: %s", cycle_id, exc)
+        return 0
 
 
 async def start_cycle(started_by: int, duration_days: int = 14) -> dict | None:
@@ -473,6 +560,29 @@ async def record_invite_join(
         if not link.data:
             return {"status": "unknown_invite_link", "record": None}
         link_row = link.data[0]
+        if not bool(link_row.get("is_active", True)):
+            return {
+                "status": "inactive_invite_link",
+                "record": None,
+                "cycle_id": link_row.get("cycle_id"),
+                "inviter_telegram_id": link_row.get("inviter_telegram_id"),
+                "chat_id": link_row.get("chat_id"),
+            }
+        cycle = (
+            client.table("campaign_cycles")
+            .select("id,reward_config")
+            .eq("id", link_row["cycle_id"])
+            .limit(1)
+            .execute()
+        )
+        if cycle.data and not referrals_are_open(cycle.data[0]):
+            return {
+                "status": "referrals_closed",
+                "record": None,
+                "cycle_id": link_row.get("cycle_id"),
+                "inviter_telegram_id": link_row.get("inviter_telegram_id"),
+                "chat_id": link_row.get("chat_id"),
+            }
         if int(link_row["inviter_telegram_id"]) == int(invitee_telegram_id):
             return {
                 "status": "self_invite",
