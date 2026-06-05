@@ -511,6 +511,29 @@ async def get_or_create_invite_link_record(
                 )
                 return updated.data[0] if updated.data else row
 
+        inactive_query = (
+            client.table("campaign_invite_links")
+            .select("*")
+            .eq("cycle_id", cycle_id)
+            .eq("inviter_telegram_id", inviter_telegram_id)
+            .eq("is_active", False)
+        )
+        if chat_id is None:
+            inactive_query = inactive_query.is_("chat_id", "null")
+        else:
+            inactive_query = inactive_query.eq("chat_id", chat_id)
+        inactive = inactive_query.limit(1).execute()
+        if inactive.data:
+            if not invite_link:
+                return None
+            updated = (
+                client.table("campaign_invite_links")
+                .update({"invite_link": invite_link, "is_active": True})
+                .eq("id", inactive.data[0]["id"])
+                .execute()
+            )
+            return updated.data[0] if updated.data else inactive.data[0]
+
         if not invite_link:
             return None
 
