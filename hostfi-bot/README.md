@@ -9,7 +9,7 @@ Community management, AI-powered support, and crypto market data bot for HOSTFI.
 - **Community Management** — Welcome flow with math CAPTCHA, spam/scam detection, flood control
 - **AI Support** — RAG-powered Q&A using HOSTFI knowledge base (Gemini + ChromaDB)
 - **Live Market Data** — Crypto prices, market overview, Fear & Greed Index, price alerts
-- **Broadcast & Engagement** — Admin broadcasts, native polls, cycle-based XP campaign, invite tracking, X raids
+- **Broadcast & Engagement** — Admin broadcasts, native polls, cycle-based XP campaign, invite tracking, X raids, X follow proofs
 - **Support Tickets** — Full ticket lifecycle with claim, reply, close, and rating
 - **Admin Dashboard** — Stats, user lookup, knowledge base re-indexing, daily reports
 
@@ -210,6 +210,7 @@ When users type `/` in the chat, Telegram shows a command menu. **Only register 
    xverify - Verify your X account
    raids - Active HostFi raids
    xpost - Submit a HostFi X post for admin review
+   xfollow - Submit X follow screenshot proof
    rank - Your XP and rank
    leaderboard - Top 10 members
    ```
@@ -372,7 +373,7 @@ hostfi-bot/
 │   │   ├── support.py         # AI /ask command
 │   │   ├── market.py          # Price, rates, alerts
 │   │   ├── broadcast.py       # Broadcast, poll, campaign leaderboard
-│   │   ├── campaign.py        # XP cycles, invites, raids, X posts
+│   │   ├── campaign.py        # XP cycles, invites, raids, X posts, X follow proofs
 │   │   ├── tickets.py         # Support tickets
 │   │   └── admin.py           # Stats, lookup, reindex
 │   ├── filters/
@@ -444,6 +445,7 @@ hostfi-bot/
 | `/raids` | View active X raids |
 | `/raid submit [id] [url]` | Submit raid proof |
 | `/xpost [url]` | Submit a HostFi X post for admin review |
+| `/xfollow` | Submit X follow screenshot proof |
 | `/rank` | Your XP rank |
 | `/leaderboard` | Top 10 members |
 

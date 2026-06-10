@@ -244,6 +244,7 @@ def _register_command_handlers(app: Application) -> None:
         raid_command,
         raids_command,
         referrals_command,
+        xfollow_command,
         xlink_command,
         xpost_command,
         xp_router_command,
@@ -261,6 +262,7 @@ def _register_command_handlers(app: Application) -> None:
     app.add_handler(CommandHandler("raids", raids_command))
     app.add_handler(CommandHandler("raid", raid_command))
     app.add_handler(CommandHandler("xpost", xpost_command))
+    app.add_handler(CommandHandler("xfollow", xfollow_command))
     app.add_handler(CommandHandler("cycle", cycle_command))
     app.add_handler(CommandHandler("award", award_command))
 
@@ -306,6 +308,7 @@ def _register_callback_handlers(app: Application) -> None:
     from bot.handlers.campaign import (
         campaign_callback_handler,
         raid_submit_info_callback,
+        xfollow_review_callback,
         xpost_review_callback,
     )
     from bot.handlers.community import (
@@ -342,6 +345,9 @@ def _register_callback_handlers(app: Application) -> None:
 
     app.add_handler(
         CallbackQueryHandler(xpost_review_callback, pattern=r"^xpost_(approve|reject)_")
+    )
+    app.add_handler(
+        CallbackQueryHandler(xfollow_review_callback, pattern=r"^xfollow_(approve|reject)_")
     )
 
     app.add_handler(
@@ -413,11 +419,14 @@ def _register_message_handlers(app: Application) -> None:
         )
     )
 
-    # Campaign button flows consume the user's next text message when pending.
+    # Campaign button flows consume the user's next text/image message when pending.
     app.add_handler(
         MessageHandler(
-            filters.TEXT
-            & ~filters.COMMAND
+            (
+                (filters.TEXT & ~filters.COMMAND)
+                | filters.PHOTO
+                | filters.Document.IMAGE
+            )
             & ~filters.StatusUpdate.ALL,
             campaign_guided_input_handler,
         ),

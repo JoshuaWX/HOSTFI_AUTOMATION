@@ -119,6 +119,7 @@ async def lifespan(app: FastAPI):
         BotCommand("xp", "Your campaign XP"),
         BotCommand("raids", "View active raids"),
         BotCommand("leaderboard", "Community leaderboard"),
+        BotCommand("xfollow", "Submit X follow proof"),
         BotCommand("support", "Open a support ticket"),
         BotCommand("ask", "Ask the AI assistant"),
     ]

@@ -16,8 +16,10 @@ logger = logging.getLogger(__name__)
 
 XP_INVITE = 30
 XP_RAID = 100
-XP_X_POST = 150
+XP_X_POST = 100
 XP_HELPFUL = 100
+XP_X_FOLLOW_REFERRER = 150
+XP_X_FOLLOW_REFEREE = 50
 
 REWARD_CONFIG = {
     "1": "$25",
@@ -829,6 +831,16 @@ async def get_invite_stats(telegram_id: int, cycle_id: int | None = None) -> dic
             .execute()
         )
         invite_xp = sum(int(row.get("amount") or 0) for row in events.data or [])
+        follow_events = (
+            client.table("xp_events")
+            .select("amount")
+            .eq("cycle_id", cycle["id"])
+            .eq("telegram_id", telegram_id)
+            .eq("event_type", "x_follow_referrer_bonus")
+            .eq("status", "approved")
+            .execute()
+        )
+        follow_bonus_xp = sum(int(row.get("amount") or 0) for row in follow_events.data or [])
 
         link = (
             client.table("campaign_invite_links")
@@ -847,6 +859,7 @@ async def get_invite_stats(telegram_id: int, cycle_id: int | None = None) -> dic
             "awarded": counts["awarded"],
             "ineligible": counts["ineligible"],
             "invite_xp": invite_xp,
+            "follow_bonus_xp": follow_bonus_xp,
             "invite_link": link.data[0].get("invite_link") if link.data else None,
         }
 
@@ -908,6 +921,203 @@ async def get_x_account(telegram_id: int) -> dict | None:
     except Exception as exc:
         logger.error("Failed to get X account: %s", exc)
         return None
+
+
+async def get_current_invite_join_for_referee(cycle_id: int, referee_telegram_id: int) -> dict | None:
+    """Return the active-cycle invite join that made a user eligible as a referee."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        result = (
+            client.table("campaign_invite_joins")
+            .select("*")
+            .eq("cycle_id", cycle_id)
+            .eq("invitee_telegram_id", referee_telegram_id)
+            .in_("status", ["pending", "awarded"])
+            .order("joined_at", desc=True)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to get invite join for referee %s: %s", referee_telegram_id, exc)
+        return None
+
+
+async def has_x_follow_submission(telegram_id: int, x_account_id: int | None = None) -> bool:
+    """Return True if a user/X account already has a pending or approved follow proof."""
+
+    def _op() -> bool:
+        client = get_supabase_client()
+        user_result = (
+            client.table("x_follow_submissions")
+            .select("id")
+            .eq("referee_telegram_id", telegram_id)
+            .in_("status", ["pending", "approved"])
+            .limit(1)
+            .execute()
+        )
+        if user_result.data:
+            return True
+        if x_account_id is None:
+            return False
+        account_result = (
+            client.table("x_follow_submissions")
+            .select("id")
+            .eq("x_account_id", x_account_id)
+            .in_("status", ["pending", "approved"])
+            .limit(1)
+            .execute()
+        )
+        return bool(account_result.data)
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to check X follow submission for %s: %s", telegram_id, exc)
+        return True
+
+
+async def record_x_follow_submission(
+    cycle_id: int,
+    invite_join_id: int,
+    referrer_telegram_id: int,
+    referee_telegram_id: int,
+    x_account_id: int | None,
+    x_username: str,
+    proof_file_id: str,
+    proof_file_unique_id: str | None,
+    proof_content_type: str,
+    metadata: dict[str, Any] | None = None,
+) -> dict | None:
+    """Record an admin-reviewed HostFi X follow screenshot submission."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        result = (
+            client.table("x_follow_submissions")
+            .insert(
+                {
+                    "cycle_id": cycle_id,
+                    "invite_join_id": invite_join_id,
+                    "referrer_telegram_id": referrer_telegram_id,
+                    "referee_telegram_id": referee_telegram_id,
+                    "x_account_id": x_account_id,
+                    "x_username": x_username.lower().lstrip("@"),
+                    "proof_file_id": proof_file_id,
+                    "proof_file_unique_id": proof_file_unique_id,
+                    "proof_content_type": proof_content_type,
+                    "status": "pending",
+                    "metadata": metadata or {},
+                }
+            )
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to record X follow submission: %s", exc)
+        return None
+
+
+async def get_x_follow_submission(submission_id: int) -> dict | None:
+    """Return an X follow proof submission by id."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        result = (
+            client.table("x_follow_submissions")
+            .select("*")
+            .eq("id", submission_id)
+            .limit(1)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to get X follow submission %s: %s", submission_id, exc)
+        return None
+
+
+async def get_pending_x_follow_submissions(limit: int = 10) -> list[dict]:
+    """Return pending X follow proof submissions for admin review."""
+
+    def _op() -> list[dict]:
+        client = get_supabase_client()
+        result = (
+            client.table("x_follow_submissions")
+            .select("*")
+            .eq("status", "pending")
+            .order("created_at", desc=False)
+            .limit(limit)
+            .execute()
+        )
+        return result.data or []
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to get pending X follow submissions: %s", exc)
+        return []
+
+
+async def mark_x_follow_submission_reviewed(
+    submission_id: int,
+    status: str,
+    reviewed_by: int,
+    *,
+    referrer_xp_awarded: int = 0,
+    referee_xp_awarded: int = 0,
+) -> dict | None:
+    """Mark an X follow proof submission as approved or rejected."""
+
+    def _op() -> dict | None:
+        client = get_supabase_client()
+        now = _now()
+        payload: dict[str, Any] = {
+            "status": status,
+            "reviewed_by": reviewed_by,
+            "reviewed_at": _iso(now),
+            "referrer_xp_awarded": referrer_xp_awarded,
+            "referee_xp_awarded": referee_xp_awarded,
+        }
+        if status == "approved":
+            payload["awarded_at"] = _iso(now)
+        result = (
+            client.table("x_follow_submissions")
+            .update(payload)
+            .eq("id", submission_id)
+            .execute()
+        )
+        return result.data[0] if result.data else None
+
+    try:
+        return await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to review X follow submission %s: %s", submission_id, exc)
+        return None
+
+
+async def delete_x_follow_submission(submission_id: int) -> None:
+    """Delete an unreviewed X follow submission after an admin-alert delivery failure."""
+
+    def _op() -> None:
+        client = get_supabase_client()
+        client.table("x_follow_submissions").delete().eq("id", submission_id).eq(
+            "status", "pending"
+        ).execute()
+
+    try:
+        await asyncio.to_thread(_op)
+    except Exception as exc:
+        logger.error("Failed to delete X follow submission %s: %s", submission_id, exc)
 
 
 async def verify_x_account(telegram_id: int, x_user_id: str, username: str, post_id: str) -> dict | None:

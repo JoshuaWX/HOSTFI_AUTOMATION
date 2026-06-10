@@ -25,7 +25,16 @@ from bot.utils.permissions import is_admin
 from bot.utils.rate_limiter import check_rate_limit, get_redis
 from config import ADMIN_CHANNEL_ID, COMMUNITY_GROUP_IDS, TELEGRAM_BOT_TOKEN
 from database.logs import log_action
-from database.campaign import get_campaign_leaderboard, get_campaign_rank
+from database.campaign import (
+    XP_HELPFUL,
+    XP_INVITE,
+    XP_RAID,
+    XP_X_FOLLOW_REFEREE,
+    XP_X_FOLLOW_REFERRER,
+    XP_X_POST,
+    get_campaign_leaderboard,
+    get_campaign_rank,
+)
 from database.users import (
     get_or_create_user,
 )
@@ -47,6 +56,7 @@ def _start_dashboard_text() -> str:
             title("Main Paths"),
             bullet("Check XP and leaderboard"),
             bullet("Invite friends and track referrals"),
+            bullet("Submit X follow screenshots for admin review"),
             bullet("Join raids and submit proof"),
             bullet("Submit X posts for admin review"),
             bullet("Open support when you need help"),
@@ -179,10 +189,11 @@ async def rank_command(
                 field("Badge", badge),
                 "",
                 title("Earn XP"),
-                bullet("100 XP — approved X raids"),
-                bullet("30 XP — Telegram invites after 5h"),
-                bullet("150 XP — HostFi X posts approved by admins"),
-                bullet("100 XP — approved helpful contributions"),
+                bullet(f"{XP_RAID} XP — approved X raids"),
+                bullet(f"{XP_INVITE} XP — confirmed Telegram invites"),
+                bullet(f"{XP_X_FOLLOW_REFERRER} XP / {XP_X_FOLLOW_REFEREE} XP — approved X follow proof"),
+                bullet(f"{XP_X_POST} XP — HostFi X posts approved by admins"),
+                bullet(f"{XP_HELPFUL} XP — approved helpful contributions"),
                 "",
                 "Get your invite link with <code>/invite</code>.",
             ]
@@ -259,7 +270,7 @@ async def leaderboard_command(
 
         if not top_users:
             msg = await update.effective_message.reply_text(
-                status_text("info", "No campaign leaderboard data yet. Earn XP through raids, invites, posts, and approved helpful contributions.")
+                status_text("info", "No campaign leaderboard data yet. Earn XP through raids, invites, X follow proof, posts, and approved helpful contributions.")
             )
             await schedule_delete(msg, context, 90)
             return
@@ -698,7 +709,7 @@ async def build_leaderboard_message() -> str:
 
     if not top_users:
         lines.append("")
-        lines.append("No data yet. Complete raids, invite members, post about HostFi, or earn helpful contribution awards.")
+        lines.append("No data yet. Complete raids, invite members, submit X follow proof, post about HostFi, or earn helpful contribution awards.")
     else:
         for i, user in enumerate(top_users):
             prefix = f"{i + 1}."
@@ -709,7 +720,7 @@ async def build_leaderboard_message() -> str:
 
     lines.append("")
     lines.append(
-        "Earn XP: raids, retained invites, HostFi X posts, and helpful contributions\n"
+        "Earn XP: raids, retained invites, X follow proof, HostFi X posts, and helpful contributions\n"
         "Trade on <b>HostFi</b>: https://hostfi.io"
     )
 

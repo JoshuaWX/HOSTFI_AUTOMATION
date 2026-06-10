@@ -73,6 +73,9 @@ def campaign_home_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton("Submit X Post", callback_data="campaign_xpost_start"),
             ],
             [
+                InlineKeyboardButton("Follow HostFi on X", callback_data="campaign_xfollow_start"),
+            ],
+            [
                 InlineKeyboardButton("Link X", callback_data="campaign_xlink_start"),
                 InlineKeyboardButton("Support", callback_data="campaign_support"),
             ],
@@ -111,6 +114,9 @@ def campaign_earn_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton("Submit X Post", callback_data="campaign_xpost_start"),
                 InlineKeyboardButton("Link X", callback_data="campaign_xlink_start"),
+            ],
+            [
+                InlineKeyboardButton("X Follow Proof", callback_data="campaign_xfollow_start"),
             ],
             [
                 InlineKeyboardButton("My XP", callback_data="campaign_xp"),
@@ -247,6 +253,26 @@ def xpost_review_keyboard(submission_id: int, post_url: str) -> InlineKeyboardMa
                 InlineKeyboardButton(
                     "Reject",
                     callback_data=f"xpost_reject_{submission_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def xfollow_review_keyboard(submission_id: int, x_username: str) -> InlineKeyboardMarkup:
+    """Build admin review buttons for an X follow screenshot proof."""
+    handle = x_username.lower().lstrip("@")
+    return InlineKeyboardMarkup(
+        [
+            [InlineKeyboardButton("Open X Profile", url=f"https://x.com/{handle}")],
+            [
+                InlineKeyboardButton(
+                    "Approve",
+                    callback_data=f"xfollow_approve_{submission_id}",
+                ),
+                InlineKeyboardButton(
+                    "Reject",
+                    callback_data=f"xfollow_reject_{submission_id}",
                 ),
             ],
         ]

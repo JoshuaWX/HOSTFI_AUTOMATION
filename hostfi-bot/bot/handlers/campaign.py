@@ -29,6 +29,7 @@ from bot.utils.keyboards import (
     campaign_home_keyboard,
     campaign_raid_keyboard,
     campaign_xverify_keyboard,
+    xfollow_review_keyboard,
     xpost_review_keyboard,
 )
 from bot.utils.permissions import is_admin, is_admin_channel_chat, is_superadmin
@@ -52,12 +53,15 @@ from database.campaign import (
     XP_HELPFUL,
     XP_INVITE,
     XP_RAID,
+    XP_X_FOLLOW_REFEREE,
+    XP_X_FOLLOW_REFERRER,
     XP_X_POST,
     award_xp,
     close_raid,
     create_raid,
     create_x_verification,
     deactivate_invite_links,
+    delete_x_follow_submission,
     delete_x_post_submission,
     finish_cycle,
     get_active_cycle,
@@ -71,16 +75,21 @@ from database.campaign import (
     get_pending_invite_joins,
     get_raid,
     get_raid_messages,
+    get_current_invite_join_for_referee,
+    get_x_follow_submission,
     get_x_post_submission,
     get_x_account,
+    has_x_follow_submission,
     has_daily_x_post,
     has_raid_submission,
     is_disqualified,
+    mark_x_follow_submission_reviewed,
     mark_x_post_submission_reviewed,
     mark_invite_join,
     record_invite_join,
     record_raid_message,
     record_raid_submission,
+    record_x_follow_submission,
     record_x_post_submission,
     referrals_are_open,
     set_referrals_open,
@@ -122,6 +131,28 @@ def _matches_pending_input(action_type: str | None, text: str) -> bool:
     if action_type == "xlink_handle":
         return _looks_like_x_handle(text)
     return False
+
+
+def _extract_follow_proof_image(message: Message) -> tuple[str, str | None, str] | None:
+    """Return Telegram image proof identifiers from a photo or image document."""
+    if message.photo:
+        photo = message.photo[-1]
+        return photo.file_id, photo.file_unique_id, "photo"
+    document = message.document
+    if document:
+        mime = (document.mime_type or "").lower()
+        name = (document.file_name or "").lower()
+        if mime.startswith("image/") or name.endswith((".jpg", ".jpeg", ".png", ".webp")):
+            return document.file_id, document.file_unique_id, "image_document"
+    return None
+
+
+def _message_matches_pending_input(action_type: str | None, message: Message) -> bool:
+    """Return True when a message matches the pending action's expected input shape."""
+    if action_type == "x_follow_proof":
+        return _extract_follow_proof_image(message) is not None
+    text = (message.text or "").strip()
+    return bool(text and _matches_pending_input(action_type, text))
 
 
 def _log_pending_event(
@@ -345,6 +376,8 @@ def _campaign_home_text(cycle: dict) -> str:
         + "\n"
         + bullet(f"Telegram invites after {_retention_label()} — <b>{XP_INVITE} XP</b>")
         + "\n"
+        + bullet(f"X follow proof — referrer <b>{XP_X_FOLLOW_REFERRER} XP</b>, invited user <b>{XP_X_FOLLOW_REFEREE} XP</b>")
+        + "\n"
         + bullet(f"Helpful contributions — <b>{XP_HELPFUL} XP</b>")
         + "\n"
         + bullet(f"HostFi X posts — <b>{XP_X_POST} XP</b>, admin-reviewed once daily")
@@ -358,7 +391,7 @@ def _user_dashboard_text() -> str:
         [
             title("HOSTFI Dashboard", "🏠"),
             "",
-            "Use the buttons below to manage XP, invites, raids, X posts, and support.",
+            "Use the buttons below to manage XP, invites, raids, X follow proof, X posts, and support.",
             "",
             "Most private actions happen here in DM so the group stays clean.",
         ]
@@ -371,7 +404,8 @@ def _earn_xp_text() -> str:
         [
             title("Earn XP", "⭐"),
             "",
-            bullet(f"Invite friends — <b>{XP_INVITE} XP</b> after {_retention_label()}"),
+            bullet(f"Invite friends — referrer earns <b>{XP_INVITE} XP</b> after {_retention_label()}"),
+            bullet(f"X follow proof — referrer earns <b>{XP_X_FOLLOW_REFERRER} XP</b>, invited user earns <b>{XP_X_FOLLOW_REFEREE} XP</b>"),
             bullet(f"Join approved raids — <b>{XP_RAID} XP</b>"),
             bullet(f"Submit HostFi X posts — <b>{XP_X_POST} XP</b>, admin-reviewed"),
             bullet(f"Helpful contributions — <b>{XP_HELPFUL} XP</b> with admin approval"),
@@ -872,6 +906,266 @@ async def _submit_xpost_url(update: Update, context: ContextTypes.DEFAULT_TYPE, 
     return True
 
 
+def _xfollow_prompt_text() -> str:
+    """Build the DM prompt for X follow screenshot proof."""
+    return "\n".join(
+        [
+            title("X Follow Proof", "𝕏"),
+            "",
+            "Upload a screenshot showing your linked X account following HostFi.",
+            "",
+            bullet("Send the screenshot as a photo or image document."),
+            bullet("Make sure your X handle is visible."),
+            bullet("Admins manually review the proof."),
+        ]
+    )
+
+
+async def _xfollow_start_error(user_id: int) -> str | None:
+    """Return an eligibility error for starting X follow proof, or None if OK."""
+    cycle = await get_active_cycle()
+    if not cycle:
+        return _campaign_missing()
+    if await is_disqualified(user_id, int(cycle["id"])):
+        return status_text("warning", "You are disqualified from the current campaign cycle.")
+    account = await get_x_account(user_id)
+    if not account or account.get("status") != "verified":
+        return status_text("warning", "Link your X account first, then submit your follow proof.")
+    invite_join = await get_current_invite_join_for_referee(int(cycle["id"]), user_id)
+    if not invite_join:
+        return status_text(
+            "warning",
+            "This bonus is only for users who joined through a campaign referral link.",
+        )
+    if await has_x_follow_submission(user_id, int(account["id"]) if account.get("id") else None):
+        return status_text("warning", "You already have a pending or approved X follow proof.")
+    return None
+
+
+async def _begin_xfollow_proof_flow(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Start the DM-first screenshot proof flow for following HostFi on X."""
+    user_id = await _ensure_user(update)
+    if not user_id or not update.effective_message:
+        return False
+
+    error = await _xfollow_start_error(user_id)
+    prompt = error or _xfollow_prompt_text()
+
+    if _is_community_group_update(update):
+        if not error:
+            _set_pending(context, {"type": "x_follow_proof", "chat_id": user_id})
+        try:
+            await context.bot.send_message(
+                chat_id=user_id,
+                text=prompt,
+                parse_mode="HTML",
+                reply_markup=campaign_cancel_keyboard() if not error else campaign_home_keyboard(),
+            )
+        except Exception:
+            if not error:
+                _clear_pending(context)
+            await send_dm_redirect_status(update, context, dm_sent=False)
+            return False
+        await send_dm_redirect_status(update, context, dm_sent=True)
+        return not bool(error)
+
+    if error:
+        await update.effective_message.reply_text(
+            prompt,
+            parse_mode="HTML",
+            reply_markup=campaign_home_keyboard(),
+        )
+        return False
+
+    payload = _set_pending(
+        context,
+        {"type": "x_follow_proof", "chat_id": update.effective_chat.id},
+    )
+    _log_pending_event(
+        "set",
+        payload.get("type"),
+        user_id,
+        payload.get("chat_id"),
+    )
+    await update.effective_message.reply_text(
+        prompt,
+        parse_mode="HTML",
+        reply_markup=campaign_cancel_keyboard(),
+    )
+    return True
+
+
+async def _xfollow_review_context(submission: dict) -> tuple[str, str]:
+    """Return clickable referrer/referee labels for an X follow review card."""
+    referrer_row = await get_user(int(submission["referrer_telegram_id"]))
+    referee_row = await get_user(int(submission["referee_telegram_id"]))
+    referrer_link = _profile_link(
+        int(submission["referrer_telegram_id"]),
+        username=referrer_row.get("username") if referrer_row else None,
+        first_name=referrer_row.get("first_name") if referrer_row else None,
+    )
+    referee_link = _profile_link(
+        int(submission["referee_telegram_id"]),
+        username=referee_row.get("username") if referee_row else None,
+        first_name=referee_row.get("first_name") if referee_row else None,
+    )
+    return referrer_link, referee_link
+
+
+def _xfollow_review_text(
+    submission: dict,
+    *,
+    referrer_link: str,
+    referee_link: str,
+    status: str | None = None,
+    reviewed_by: str | None = None,
+) -> str:
+    """Build the admin review card for an X follow proof submission."""
+    display_status = status or str(submission.get("status") or "pending").title()
+    lines = [
+        title("X Follow Proof Review", "𝕏"),
+        "",
+        field("Submission", f"<b>#{submission.get('id')}</b>"),
+        field("Status", f"<b>{html.escape(display_status)}</b>"),
+        field("Referee", referee_link),
+        field("Referee ID", f"<code>{submission.get('referee_telegram_id')}</code>"),
+        field("Referrer", referrer_link),
+        field("Referrer ID", f"<code>{submission.get('referrer_telegram_id')}</code>"),
+        field("Linked X", f"<b>@{html.escape(str(submission.get('x_username') or '').lstrip('@'))}</b>"),
+        field("Cycle", f"<b>#{submission.get('cycle_id')}</b>"),
+        field("Referrer XP", f"<b>{int(submission.get('referrer_xp_awarded') or 0):,}</b>"),
+        field("Referee XP", f"<b>{int(submission.get('referee_xp_awarded') or 0):,}</b>"),
+        "",
+        "<i>Admin must manually verify that the linked X account follows HostFi.</i>",
+    ]
+    if reviewed_by:
+        lines.insert(4, field("Reviewed by", reviewed_by))
+    return "\n".join(lines)
+
+
+async def _send_xfollow_review_card(
+    context: ContextTypes.DEFAULT_TYPE,
+    chat_id: int,
+    submission: dict,
+) -> None:
+    """Send an X follow proof review card with the uploaded screenshot attached."""
+    referrer_link, referee_link = await _xfollow_review_context(submission)
+    caption = _xfollow_review_text(
+        submission,
+        referrer_link=referrer_link,
+        referee_link=referee_link,
+    )
+    markup = xfollow_review_keyboard(int(submission["id"]), str(submission.get("x_username") or ""))
+    proof_file_id = str(submission.get("proof_file_id") or "")
+    if submission.get("proof_content_type") == "image_document":
+        await context.bot.send_document(
+            chat_id=chat_id,
+            document=proof_file_id,
+            caption=caption,
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+    else:
+        await context.bot.send_photo(
+            chat_id=chat_id,
+            photo=proof_file_id,
+            caption=caption,
+            parse_mode="HTML",
+            reply_markup=markup,
+        )
+
+
+async def _submit_xfollow_proof(update: Update, context: ContextTypes.DEFAULT_TYPE) -> bool:
+    """Submit a screenshot showing the referee followed HostFi on X."""
+    user_id = await _ensure_user(update)
+    message = update.effective_message
+    if not user_id or not message:
+        return False
+
+    proof = _extract_follow_proof_image(message)
+    if not proof:
+        await message.reply_text(
+            status_text("error", "Upload a screenshot as a photo or image document."),
+            parse_mode="HTML",
+            reply_markup=campaign_cancel_keyboard(),
+        )
+        return False
+
+    if not ADMIN_CHANNEL_ID:
+        await message.reply_text(status_text("error", "Admin review channel is not configured."))
+        return False
+
+    cycle = await get_active_cycle()
+    if not cycle:
+        await message.reply_text(_campaign_missing(), parse_mode="HTML")
+        return False
+    if await is_disqualified(user_id, int(cycle["id"])):
+        await message.reply_text(status_text("warning", "You are disqualified from the current campaign cycle."))
+        return False
+
+    account = await get_x_account(user_id)
+    if not account or account.get("status") != "verified":
+        await message.reply_text(
+            status_text("warning", "Link your X account first, then submit your follow proof."),
+            parse_mode="HTML",
+            reply_markup=campaign_home_keyboard(),
+        )
+        return False
+
+    invite_join = await get_current_invite_join_for_referee(int(cycle["id"]), user_id)
+    if not invite_join:
+        await message.reply_text(
+            status_text("warning", "This bonus is only for users who joined through a campaign referral link."),
+            parse_mode="HTML",
+            reply_markup=campaign_home_keyboard(),
+        )
+        return False
+
+    x_account_id = int(account["id"]) if account.get("id") else None
+    if await has_x_follow_submission(user_id, x_account_id):
+        await message.reply_text(
+            status_text("warning", "You already have a pending or approved X follow proof."),
+            parse_mode="HTML",
+            reply_markup=campaign_home_keyboard(),
+        )
+        return False
+
+    proof_file_id, proof_file_unique_id, proof_content_type = proof
+    submission = await record_x_follow_submission(
+        cycle_id=int(cycle["id"]),
+        invite_join_id=int(invite_join["id"]),
+        referrer_telegram_id=int(invite_join["inviter_telegram_id"]),
+        referee_telegram_id=user_id,
+        x_account_id=x_account_id,
+        x_username=str(account.get("username") or ""),
+        proof_file_id=proof_file_id,
+        proof_file_unique_id=proof_file_unique_id,
+        proof_content_type=proof_content_type,
+        metadata={
+            "invite_join_status": invite_join.get("status"),
+            "x_user_id": account.get("x_user_id"),
+        },
+    )
+    if not submission:
+        await message.reply_text(status_text("error", "Could not record your X follow proof."))
+        return False
+
+    try:
+        await _send_xfollow_review_card(context, ADMIN_CHANNEL_ID, submission)
+    except Exception as exc:
+        logger.error("Failed to send X follow review alert: %s", exc)
+        await delete_x_follow_submission(int(submission["id"]))
+        await message.reply_text(status_text("error", "Could not send your proof to admins. Try again later."))
+        return False
+
+    await message.reply_text(
+        title("X Follow Proof Submitted", "✅") + "\n\nYour screenshot was sent to admins for review.",
+        parse_mode="HTML",
+        reply_markup=campaign_home_keyboard(),
+    )
+    return True
+
+
 async def campaign_cancel_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Cancel a pending campaign action when invoked in the expected chat."""
     if not update.effective_message:
@@ -973,9 +1267,11 @@ def _invite_link_text(link: str, cycle: dict) -> str:
         f"{title('Campaign Invite Link', '👥')}\n\n"
         f"<code>{html.escape(link)}</code>\n\n"
         f"{field('Cycle', f'<b>#{cycle_number}</b>')}\n"
-        f"{field('Reward', f'<b>{XP_INVITE} XP</b>')}\n"
+        f"{field('Invite reward', f'<b>{XP_INVITE} XP</b> to the referrer')}\n"
+        f"{field('X follow bonus', f'Referrer <b>{XP_X_FOLLOW_REFERRER} XP</b> · invited user <b>{XP_X_FOLLOW_REFEREE} XP</b>')}\n"
         f"{field('Retention', f'<b>{_retention_label()}</b>')}\n\n"
-        "XP is awarded after the invited user stays in the community for the full retention window."
+        "Invite XP is awarded after the invited user passes all invite checks. "
+        "The X follow bonus requires the invited user to link X and submit screenshot proof for admin review."
     )
 
 
@@ -1087,6 +1383,7 @@ async def invites_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         field("Confirmed", f"<b>{stats.get('awarded', 0)}</b>"),
         field("Ineligible", f"<b>{stats.get('ineligible', 0)}</b>"),
         field("Invite XP", f"<b>{stats.get('invite_xp', 0):,}</b>"),
+        field("X follow bonus XP", f"<b>{stats.get('follow_bonus_xp', 0):,}</b>"),
         field("Retention", f"<b>{_retention_label()}</b>"),
     ]
     if total_joins == 0:
@@ -1327,6 +1624,13 @@ async def xpost_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
         )
         return
     await _submit_xpost_url(update, context, context.args[0])
+
+
+async def xfollow_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Start the admin-reviewed X follow screenshot proof flow."""
+    if not update.effective_message:
+        return
+    await _begin_xfollow_proof_flow(update, context)
 
 
 # ---------------------------------------------------------------------------
@@ -1859,6 +2163,187 @@ async def xpost_review_callback(update: Update, context: ContextTypes.DEFAULT_TY
     await query.answer("Unknown review action.", show_alert=True)
 
 
+async def _edit_xfollow_review_card(query, text: str) -> None:
+    """Update an X follow review card whether it was sent as a photo/document caption or text."""
+    if query.message and (query.message.photo or query.message.document):
+        await query.edit_message_caption(
+            caption=text,
+            parse_mode="HTML",
+            reply_markup=None,
+        )
+        return
+    await query.edit_message_text(
+        text,
+        parse_mode="HTML",
+        reply_markup=None,
+        link_preview_options=LinkPreviewOptions(is_disabled=True),
+    )
+
+
+async def xfollow_review_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle admin approve/reject buttons for X follow screenshot proof."""
+    query = update.callback_query
+    if not query or not query.data or not query.message:
+        return
+
+    if not await is_admin(query.from_user.id, bot=context.bot):
+        await query.answer("Admins only.", show_alert=True)
+        return
+    if not is_admin_channel_chat(query.message.chat_id):
+        await query.answer("Use this in the admin channel.", show_alert=True)
+        return
+
+    try:
+        _, action, raw_id = query.data.split("_", 2)
+        submission_id = int(raw_id)
+    except ValueError:
+        await query.answer("Invalid review action.", show_alert=True)
+        return
+
+    submission = await get_x_follow_submission(submission_id)
+    if not submission:
+        await query.answer("Submission not found.", show_alert=True)
+        return
+    if submission.get("status") != "pending":
+        await query.answer("This submission has already been reviewed.", show_alert=True)
+        return
+
+    referrer_id = int(submission["referrer_telegram_id"])
+    referee_id = int(submission["referee_telegram_id"])
+    cycle_id = int(submission["cycle_id"])
+    reviewer = _profile_link(query.from_user.id, query.from_user.username, query.from_user.first_name)
+
+    if action == "approve":
+        referrer_amount = 0
+        referee_amount = 0
+
+        if not await is_disqualified(referrer_id, cycle_id):
+            referrer_event = await award_xp(
+                referrer_id,
+                XP_X_FOLLOW_REFERRER,
+                "x_follow_referrer_bonus",
+                "Invited user followed HostFi on X",
+                external_id=str(submission.get("proof_file_unique_id") or submission_id),
+                metadata={
+                    "submission_id": submission_id,
+                    "referee_telegram_id": referee_id,
+                    "x_username": submission.get("x_username"),
+                },
+                actor_telegram_id=query.from_user.id,
+                cycle_id=cycle_id,
+            )
+            if not referrer_event:
+                await query.answer("Could not award referrer XP.", show_alert=True)
+                return
+            referrer_amount = XP_X_FOLLOW_REFERRER
+
+        if not await is_disqualified(referee_id, cycle_id):
+            referee_event = await award_xp(
+                referee_id,
+                XP_X_FOLLOW_REFEREE,
+                "x_follow_referee_bonus",
+                "Followed HostFi on X with admin-approved screenshot proof",
+                external_id=str(submission.get("proof_file_unique_id") or submission_id),
+                metadata={
+                    "submission_id": submission_id,
+                    "referrer_telegram_id": referrer_id,
+                    "x_username": submission.get("x_username"),
+                },
+                actor_telegram_id=query.from_user.id,
+                cycle_id=cycle_id,
+            )
+            if not referee_event:
+                await query.answer("Could not award referee XP.", show_alert=True)
+                return
+            referee_amount = XP_X_FOLLOW_REFEREE
+
+        reviewed = await mark_x_follow_submission_reviewed(
+            submission_id,
+            "approved",
+            query.from_user.id,
+            referrer_xp_awarded=referrer_amount,
+            referee_xp_awarded=referee_amount,
+        )
+        if not reviewed:
+            await query.answer("XP was awarded, but review status could not be saved.", show_alert=True)
+            return
+
+        referrer_link, referee_link = await _xfollow_review_context(reviewed)
+        await _edit_xfollow_review_card(
+            query,
+            _xfollow_review_text(
+                reviewed,
+                referrer_link=referrer_link,
+                referee_link=referee_link,
+                status="Approved",
+                reviewed_by=reviewer,
+            ),
+        )
+        await query.answer("Follow proof approved.")
+        for target_id, amount, label in [
+            (referrer_id, referrer_amount, "Referral X Follow Bonus"),
+            (referee_id, referee_amount, "X Follow Proof Approved"),
+        ]:
+            if amount <= 0:
+                continue
+            try:
+                await context.bot.send_message(
+                    target_id,
+                    title(label, "✅") + f"\n\n{field('XP earned', f'<b>{amount:,}</b>')}",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+        await log_action(
+            "xfollow_approved",
+            query.from_user.id,
+            target_telegram_id=referee_id,
+            metadata={
+                "submission_id": submission_id,
+                "referrer_telegram_id": referrer_id,
+                "referrer_xp": referrer_amount,
+                "referee_xp": referee_amount,
+            },
+        )
+        return
+
+    if action == "reject":
+        reviewed = await mark_x_follow_submission_reviewed(submission_id, "rejected", query.from_user.id)
+        if not reviewed:
+            await query.answer("Could not reject submission.", show_alert=True)
+            return
+        referrer_link, referee_link = await _xfollow_review_context(reviewed)
+        await _edit_xfollow_review_card(
+            query,
+            _xfollow_review_text(
+                reviewed,
+                referrer_link=referrer_link,
+                referee_link=referee_link,
+                status="Rejected",
+                reviewed_by=reviewer,
+            ),
+        )
+        await query.answer("Follow proof rejected.")
+        try:
+            await context.bot.send_message(
+                referee_id,
+                title("X Follow Proof Not Approved", "⚠️")
+                + "\n\nYour screenshot was reviewed and not approved.",
+                parse_mode="HTML",
+            )
+        except Exception:
+            pass
+        await log_action(
+            "xfollow_rejected",
+            query.from_user.id,
+            target_telegram_id=referee_id,
+            metadata={"submission_id": submission_id, "referrer_telegram_id": referrer_id},
+        )
+        return
+
+    await query.answer("Unknown review action.", show_alert=True)
+
+
 async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle campaign inline button actions."""
     query = update.callback_query
@@ -2090,6 +2575,10 @@ async def campaign_callback_handler(update: Update, context: ContextTypes.DEFAUL
             await schedule_delete(reply, context, 60)
         return
 
+    if data == "campaign_xfollow_start":
+        await _begin_xfollow_proof_flow(update, context)
+        return
+
     if data.startswith("campaign_raid_submit_"):
         try:
             raid_id = int(data.rsplit("_", 1)[-1])
@@ -2167,10 +2656,10 @@ async def raid_submit_info_callback(update: Update, context: ContextTypes.DEFAUL
 
 async def campaign_guided_input_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Consume the next message for a pending campaign button flow."""
-    if not update.effective_message or not update.effective_message.text:
+    if not update.effective_message:
         return
 
-    text = update.effective_message.text.strip()
+    text = (update.effective_message.text or "").strip()
     pending = context.user_data.get(PENDING_ACTION_KEY)
     if not pending:
         return
@@ -2191,7 +2680,7 @@ async def campaign_guided_input_handler(update: Update, context: ContextTypes.DE
 
     if expected_chat_id and source_chat and source_chat.id != expected_chat_id:
         if source_chat.type in ("group", "supergroup") and is_community_group_chat(source_chat.id):
-            if _matches_pending_input(action_type, text):
+            if _message_matches_pending_input(action_type, update.effective_message):
                 _log_pending_event("wrong_chat_intercept", action_type, user_id, expected_chat_id)
                 notice = await update.effective_message.reply_text(
                     "This step happens in DM. Check your private chat with the bot."
@@ -2221,6 +2710,8 @@ async def campaign_guided_input_handler(update: Update, context: ContextTypes.DE
         success = await _submit_xpost_url(update, context, text)
     elif action_type == "raid_proof":
         success = await _submit_raid_proof_url(update, context, int(pending.get("raid_id")), text)
+    elif action_type == "x_follow_proof":
+        success = await _submit_xfollow_proof(update, context)
     else:
         await update.effective_message.reply_text(status_text("error", "Unknown campaign action. Cancelled."))
         success = True
@@ -2230,8 +2721,9 @@ async def campaign_guided_input_handler(update: Update, context: ContextTypes.DE
         _log_pending_event("consumed", action_type, user_id, expected_chat_id)
     else:
         _log_pending_event("failed_keep_active", action_type, user_id, expected_chat_id)
+        retry_text = "Upload another screenshot to retry, or tap Cancel." if action_type == "x_follow_proof" else "Send another value to retry, or tap Cancel."
         await update.effective_message.reply_text(
-            "Send another value to retry, or tap Cancel.",
+            retry_text,
             reply_markup=campaign_cancel_keyboard(),
         )
 

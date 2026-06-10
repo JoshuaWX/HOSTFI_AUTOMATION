@@ -641,7 +641,8 @@ PRIVATE_HELP_TEXT = "\n".join(
         bullet("<code>/support</code> — Open a ticket"),
         bullet("<code>/ask</code> — Ask the AI assistant"),
         "",
-        "Invite links, X linking, X posts, and raid proof submission are available from the dashboard buttons.",
+        "Invite links, X linking, X follow proof, X posts, and raid proof submission are available from the dashboard buttons.",
+        bullet("<code>/xfollow</code> — Submit X follow screenshot proof"),
         "",
         bullet("<code>/rules</code> — Read the group rules"),
     ]
@@ -664,7 +665,7 @@ GROUP_HELP_TEXT = "\n".join(
         title("Community"),
         bullet("<code>/rules</code> — Read the group rules"),
         "",
-        "Invite links, support, AI answers, X linking, X posts, and raid proof submissions happen in DM.",
+        "Invite links, support, AI answers, X linking, X follow proof, X posts, and raid proof submissions happen in DM.",
     ]
 )
 
@@ -682,6 +683,7 @@ ADMIN_HELP_TEXT = "\n".join(
         bullet("<code>/raid create</code> — Create a raid"),
         bullet("Reply with <code>/award</code> — Award helpful XP"),
         bullet("<code>/invites @username</code> — View invite stats"),
+        bullet("X post and X follow proof reviews are posted here automatically"),
         bullet("Reply shortcut: <code>/xp add 100</code> or <code>/xp deduct 50</code>"),
         bullet("Direct: <code>/xp add|deduct|disqualify</code>"),
     ]

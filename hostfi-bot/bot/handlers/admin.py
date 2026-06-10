@@ -39,6 +39,7 @@ from database.campaign import (
     finish_cycle,
     get_active_cycle,
     get_campaign_leaderboard,
+    get_pending_x_follow_submissions,
     get_pending_x_post_submissions,
     start_cycle,
 )
@@ -616,6 +617,7 @@ async def adminhelp_command(
                 bullet("<code>/referrals open|close|status</code> — Referral controls"),
                 bullet("<code>/raid create &lt;url&gt; [minutes]</code> — Create raid"),
                 bullet("<code>/invites @username</code> — Invite stats"),
+                bullet("X Reviews — approve X posts and X follow screenshots"),
                 bullet("Reply with <code>/award</code> — Award helpful message"),
                 bullet("Reply: <code>/xp add 100</code> — Add XP to replied user"),
                 bullet("Reply: <code>/xp deduct 50</code> — Deduct XP from replied user"),
@@ -739,14 +741,16 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
 
     if data == "admin_xposts":
         submissions = await get_pending_x_post_submissions(limit=10)
+        follow_submissions = await get_pending_x_follow_submissions(limit=10)
         await query.message.reply_text(
             "\n".join(
                 [
-                    title("X Post Reviews", "📝"),
+                    title("X Reviews", "📝"),
                     "",
-                    field("Pending", f"<b>{len(submissions)}</b>"),
+                    field("Pending posts", f"<b>{len(submissions)}</b>"),
+                    field("Pending follow proofs", f"<b>{len(follow_submissions)}</b>"),
                     "",
-                    "Review cards are posted here automatically when users submit posts.",
+                    "Review cards are posted here automatically when users submit posts or follow screenshots.",
                 ]
             ),
             parse_mode="HTML",
@@ -768,6 +772,11 @@ async def admin_callback_handler(update: Update, context: ContextTypes.DEFAULT_T
                     parse_mode="HTML",
                     reply_markup=xpost_review_keyboard(int(submission["id"]), str(submission.get("proof_url") or "")),
                 )
+        if follow_submissions:
+            from bot.handlers.campaign import _send_xfollow_review_card
+
+            for submission in follow_submissions:
+                await _send_xfollow_review_card(context, query.message.chat_id, submission)
         return
 
     if data == "admin_campaign":
